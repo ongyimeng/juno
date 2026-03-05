@@ -58,6 +58,7 @@ const (
 // Config is the top-level juno configuration.
 type Config struct {
 	LogLevel                 string        `mapstructure:"log-level"`
+	LogJSON                  bool          `mapstructure:"log-json"`
 	HTTP                     bool          `mapstructure:"http"`
 	HTTPHost                 string        `mapstructure:"http-host"`
 	HTTPPort                 uint16        `mapstructure:"http-port"`
@@ -147,7 +148,11 @@ type Node struct {
 // Any errors while parsing the config on creating logger will be returned.
 // Todo: (immediate follow-up PR) tidy this function up.
 func New(cfg *Config, version string, logLevel *utils.LogLevel) (*Node, error) { //nolint:gocyclo,funlen
-	log, err := utils.NewZapLogger(logLevel, cfg.Colour)
+	log, err := utils.NewZapLogger(
+		logLevel,
+		utils.WithColour(cfg.Colour),
+		utils.WithJSON(cfg.LogJSON),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -157,11 +162,21 @@ func New(cfg *Config, version string, logLevel *utils.LogLevel) (*Node, error) {
 	if dbIsRemote {
 		database, err = remote.New(cfg.RemoteDB, context.TODO(), log, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
+		// note(rdr): A dedicated logger with level Error to avoid noise.
+		var dbLog *utils.ZapLogger
+		dbLog, err = utils.NewZapLogger(
+			utils.NewLogLevel(utils.ERROR),
+			utils.WithColour(cfg.Colour),
+			utils.WithJSON(cfg.LogJSON),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create DB logger: %w", err)
+		}
 		database, err = pebblev2.New(
 			cfg.DatabasePath,
 			pebblev2.WithCacheSize(cfg.DBCacheSize),
 			pebblev2.WithMaxOpenFiles(cfg.DBMaxHandles),
-			pebblev2.WithLogger(cfg.Colour),
+			pebblev2.WithLogger(dbLog),
 			pebblev2.WithCompactionConcurrency(cfg.DBCompactionConcurrency),
 			pebblev2.WithMemtableSize(cfg.DBMemtableSize),
 			pebblev2.WithMemtableCount(cfg.DBMemtableCount),

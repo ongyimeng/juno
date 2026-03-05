@@ -4,6 +4,7 @@ import (
 	"encoding"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -130,16 +131,82 @@ func NewNopZapLogger() *ZapLogger {
 	}
 }
 
-func NewZapLogger(logLevel *LogLevel, colour bool) (*ZapLogger, error) {
+type loggerConfig struct {
+	colour bool
+	json   bool
+	writer io.Writer
+}
+
+type LoggerOption func(*loggerConfig)
+
+func WithColour(colour bool) LoggerOption {
+	return func(cfg *loggerConfig) {
+		cfg.colour = colour
+	}
+}
+
+func WithJSON(json bool) LoggerOption {
+	return func(cfg *loggerConfig) {
+		cfg.json = json
+	}
+}
+
+// note(rdr): functionality wise so far this is only used for testing purposes
+func WithWriter(w io.Writer) LoggerOption {
+	return func(cfg *loggerConfig) {
+		cfg.writer = w
+	}
+}
+
+func NewZapLogger(logLevel *LogLevel, opts ...LoggerOption) (*ZapLogger, error) {
+	var cfg loggerConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	// todo(rdr): I don't like that we have 3 `if cfg.json`. A better local
+	// execution flow should be added
+
+	encoderConfig := zap.NewProductionEncoderConfig()
+	if cfg.json {
+		encoderConfig.EncodeLevel = capitalLevelEncoder
+		encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	} else {
+		encoderConfig.EncodeLevel = capitalColorLevelEncoder
+		if !cfg.colour {
+			encoderConfig.EncodeLevel = capitalLevelEncoder
+		}
+		encoderConfig.EncodeTime = func(
+			t time.Time, enc zapcore.PrimitiveArrayEncoder,
+		) {
+			enc.AppendString(
+				t.Local().Format("15:04:05.000 02/01/2006 -07:00"),
+			)
+		}
+	}
+
+	if cfg.writer != nil {
+		var encoder zapcore.Encoder
+		if cfg.json {
+			encoder = zapcore.NewJSONEncoder(encoderConfig)
+		} else {
+			encoder = zapcore.NewConsoleEncoder(encoderConfig)
+		}
+		core := zapcore.NewCore(
+			encoder,
+			zapcore.AddSync(cfg.writer),
+			logLevel.atomicLevel,
+		)
+		return NewZapLoggerWithCore(core), nil
+	}
+
 	config := zap.NewProductionConfig()
 	config.Sampling = nil
-	config.Encoding = "console"
-	config.EncoderConfig.EncodeLevel = capitalColorLevelEncoder
-	if !colour {
-		config.EncoderConfig.EncodeLevel = capitalLevelEncoder
-	}
-	config.EncoderConfig.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-		enc.AppendString(t.Local().Format("15:04:05.000 02/01/2006 -07:00"))
+	config.EncoderConfig = encoderConfig
+	if cfg.json {
+		config.Encoding = "json"
+	} else {
+		config.Encoding = "console"
 	}
 	config.Level = logLevel.atomicLevel
 
