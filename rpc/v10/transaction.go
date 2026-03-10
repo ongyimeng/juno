@@ -13,39 +13,28 @@ import (
 	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/NethermindEth/juno/mempool"
 	"github.com/NethermindEth/juno/rpc/rpccore"
-	rpcv9 "github.com/NethermindEth/juno/rpc/v9"
 	"github.com/NethermindEth/juno/starknet"
 	"github.com/NethermindEth/juno/starknet/compiler"
 	"github.com/NethermindEth/juno/utils"
 	"go.uber.org/zap"
 )
 
-type Transaction struct {
-	rpcv9.Transaction
-	ProofFacts []*felt.Felt `json:"proof_facts,omitempty"`
-}
-
+// AdaptTransaction adapts a core.Transaction to a local *Transaction.
+// It's a wrapper around AdaptCoreTransaction that allows to exclude proof facts
+// from the transaction. If includeProofFacts is false, the proof facts are set to nil,
+// otherwise they're returned as is.
 func AdaptTransaction(coreTx core.Transaction, includeProofFacts bool) Transaction {
-	v9Tx := rpcv9.AdaptTransaction(coreTx)
-	tx := Transaction{
-		Transaction: *v9Tx,
-	}
+	tx := *AdaptCoreTransaction(coreTx)
 
-	if includeProofFacts {
+	if !includeProofFacts {
 		if invokeTx, ok := coreTx.(*core.InvokeTransaction); ok {
-			if invokeTx.Version.Is(3) && invokeTx.ProofFacts != nil {
-				tx.ProofFacts = invokeTx.ProofFacts
+			if invokeTx.Version.Is(3) {
+				tx.ProofFacts = nil
 			}
 		}
 	}
 
 	return tx
-}
-
-type BroadcastedTransaction struct {
-	rpcv9.BroadcastedTransaction
-	Proof      utils.Base64 `json:"proof,omitempty" validate:"excluded_unless=Type INVOKE,omitempty,base64"`
-	ProofFacts []felt.Felt  `json:"proof_facts,omitempty" validate:"excluded_unless=Type INVOKE"`
 }
 
 func AdaptBroadcastedTransaction(
@@ -54,12 +43,7 @@ func AdaptBroadcastedTransaction(
 	broadcastedTxn *BroadcastedTransaction,
 	network *utils.Network,
 ) (core.Transaction, core.ClassDefinition, *felt.Felt, error) {
-	isInvokeV3 := broadcastedTxn.Transaction.Type == rpcv9.TxnInvoke
-
-	feederTxn := rpcv9.AdaptRPCTxToFeederTx(&broadcastedTxn.Transaction)
-	if isInvokeV3 && len(broadcastedTxn.ProofFacts) > 0 {
-		setProofFacts(&feederTxn, broadcastedTxn)
-	}
+	feederTxn := AdaptRPCTxToFeederTx(&broadcastedTxn.Transaction)
 
 	txn, err := sn2core.AdaptTransaction(&feederTxn)
 	if err != nil {
@@ -98,15 +82,6 @@ func AdaptBroadcastedTransaction(
 	return txn, declaredClass, paidFeeOnL1, nil
 }
 
-func setProofFacts(feederTxn *starknet.Transaction, broadcastedTxn *BroadcastedTransaction) {
-	proofFactsPtrs := make([]*felt.Felt, len(broadcastedTxn.ProofFacts))
-	for i := range broadcastedTxn.ProofFacts {
-		proofFact := broadcastedTxn.ProofFacts[i]
-		proofFactsPtrs[i] = &proofFact
-	}
-	feederTxn.ProofFacts = &proofFactsPtrs
-}
-
 func handleDeclaredClass(
 	ctx context.Context,
 	compiler compiler.Compiler,
@@ -116,7 +91,7 @@ func handleDeclaredClass(
 	var declaredClass core.ClassDefinition
 	if len(broadcastedTxn.ContractClass) != 0 {
 		var err error
-		declaredClass, err = rpcv9.AdaptDeclaredClass(
+		declaredClass, err = adaptDeclaredClass(
 			ctx, compiler, broadcastedTxn.ContractClass,
 		)
 		if err != nil {
@@ -129,10 +104,48 @@ func handleDeclaredClass(
 			}
 			t.ClassHash = &classHash
 		}
-	} else if broadcastedTxn.Type == rpcv9.TxnDeclare {
+	} else if broadcastedTxn.Type == TxnDeclare {
 		return nil, errors.New("declare without a class definition")
 	}
 	return declaredClass, nil
+}
+
+func adaptDeclaredClass(
+	ctx context.Context,
+	compiler compiler.Compiler,
+	declaredClass json.RawMessage,
+) (core.ClassDefinition, error) {
+	var feederClass starknet.ClassDefinition
+	err := json.Unmarshal(declaredClass, &feederClass)
+	if err != nil {
+		return nil, err
+	}
+
+	switch {
+	case feederClass.Sierra != nil:
+		compiledClass, cErr := compiler.Compile(ctx, feederClass.Sierra)
+		if cErr != nil {
+			return nil, cErr
+		}
+		return sn2core.AdaptSierraClass(feederClass.Sierra, compiledClass)
+	case feederClass.DeprecatedCairo != nil:
+		program := feederClass.DeprecatedCairo.Program
+
+		// strip the quotes
+		if len(program) < 2 {
+			return nil, errors.New("invalid program")
+		}
+		base64Program := string(program[1 : len(program)-1])
+
+		feederClass.DeprecatedCairo.Program, err = utils.Gzip64Decode(base64Program)
+		if err != nil {
+			return nil, err
+		}
+
+		return sn2core.AdaptDeprecatedCairoClass(feederClass.DeprecatedCairo)
+	default:
+		return nil, errors.New("empty class")
+	}
 }
 
 type AddTxResponse struct {
@@ -188,7 +201,7 @@ func (h *Handler) addToMempool(
 	userTxnHash := felt.TransactionHash(*userTxn.Hash())
 	res := AddTxResponse{TransactionHash: userTxnHash}
 	switch tx.Type {
-	case rpcv9.TxnDeployAccount:
+	case TxnDeployAccount:
 		contractAddress := core.ContractAddress(
 			&felt.Zero,
 			tx.ClassHash,
@@ -196,7 +209,7 @@ func (h *Handler) addToMempool(
 			*tx.ConstructorCallData,
 		)
 		res.ContractAddress = (*felt.Address)(&contractAddress)
-	case rpcv9.TxnDeclare:
+	case TxnDeclare:
 		classHash, err := userClass.Hash()
 		if err != nil {
 			return AddTxResponse{}, rpccore.ErrInternal.CloneWithData(err.Error())
@@ -210,11 +223,10 @@ func (h *Handler) pushToFeederGateway(
 	ctx context.Context,
 	tx *BroadcastedTransaction,
 ) (AddTxResponse, *jsonrpc.Error) {
-	v9Tx := &tx.BroadcastedTransaction
-	if v9Tx.Transaction.Type == rpcv9.TxnDeclare &&
-		v9Tx.Transaction.Version.Cmp(felt.NewFromUint64[felt.Felt](2)) != -1 {
+	if tx.Transaction.Type == TxnDeclare &&
+		tx.Transaction.Version.Cmp(felt.NewFromUint64[felt.Felt](2)) != -1 {
 		contractClass := make(map[string]any)
-		if err := json.Unmarshal(v9Tx.ContractClass, &contractClass); err != nil {
+		if err := json.Unmarshal(tx.ContractClass, &contractClass); err != nil {
 			return AddTxResponse{}, rpccore.ErrInternal.CloneWithData(
 				fmt.Sprintf("unmarshal contract class: %v", err),
 			)
@@ -244,10 +256,10 @@ func (h *Handler) pushToFeederGateway(
 				fmt.Sprintf("marshal revised contract class: %v", err),
 			)
 		}
-		v9Tx.ContractClass = newContractClass
+		tx.ContractClass = newContractClass
 	}
 
-	payload := adaptRPCTxToFeederPayload(tx)
+	payload := AdaptRPCTxToAddTxGatewayPayload(tx)
 	txJSON, err := json.Marshal(&payload)
 	if err != nil {
 		return AddTxResponse{}, rpccore.ErrInternal.CloneWithData(
@@ -261,7 +273,7 @@ func (h *Handler) pushToFeederGateway(
 
 	respJSON, err := h.gatewayClient.AddTransaction(ctx, txJSON)
 	if err != nil {
-		jsonErr := rpcv9.MakeJSONErrorFromGatewayError(err)
+		jsonErr := MakeJSONErrorFromGatewayError(err)
 		return AddTxResponse{}, jsonErr
 	}
 
@@ -284,34 +296,15 @@ func (h *Handler) pushToFeederGateway(
 	}, nil
 }
 
-type addTxGatewayPayload struct {
-	rpcv9.AddTxGatewayPayload
-	Proof      utils.Base64 `json:"proof,omitempty"`
-	ProofFacts []felt.Felt  `json:"proof_facts,omitempty"`
-}
-
-func adaptRPCTxToFeederPayload(
-	tx *BroadcastedTransaction,
-) addTxGatewayPayload {
-	var payload addTxGatewayPayload
-	rpcv9Payload := rpcv9.AdaptRPCTxToAddTxGatewayPayload(&tx.BroadcastedTransaction)
-	payload.AddTxGatewayPayload = rpcv9Payload
-	if tx.Transaction.Type == rpcv9.TxnInvoke && isVersion3(tx.Transaction.Version) {
-		payload.Proof = tx.Proof
-		payload.ProofFacts = tx.ProofFacts
-	}
-	return payload
-}
-
 func (h *Handler) TransactionStatus(
 	ctx context.Context,
 	hash *felt.Felt,
-) (rpcv9.TransactionStatus, *jsonrpc.Error) {
+) (TransactionStatus, *jsonrpc.Error) {
 	receipt, txErr := h.TransactionReceiptByHash(hash)
 	switch txErr {
 	case nil:
-		return rpcv9.TransactionStatus{
-			Finality:      rpcv9.TxnStatus(receipt.FinalityStatus),
+		return TransactionStatus{
+			Finality:      TxnStatus(receipt.FinalityStatus),
 			Execution:     receipt.ExecutionStatus,
 			FailureReason: receipt.RevertReason,
 		}, nil
@@ -337,7 +330,7 @@ func (h *Handler) TransactionStatus(
 
 			txStatus, err = h.feederClient.Transaction(ctx, hash)
 			if err != nil {
-				return rpcv9.TransactionStatus{}, jsonrpc.Err(jsonrpc.InternalError, err.Error())
+				return TransactionStatus{}, jsonrpc.Err(jsonrpc.InternalError, err.Error())
 			}
 
 			if txStatus.FinalityStatus == starknet.NotReceived && h.submittedTransactionsCache != nil {
@@ -347,16 +340,16 @@ func (h *Handler) TransactionStatus(
 			}
 		}
 
-		status, err := rpcv9.AdaptTransactionStatus(txStatus)
+		status, err := AdaptTransactionStatus(txStatus)
 		if err != nil {
-			if !errors.Is(err, rpcv9.ErrTransactionNotFound) {
+			if !errors.Is(err, ErrTransactionNotFound) {
 				h.log.Error("Failed to adapt transaction status", zap.Error(err))
 			}
-			return rpcv9.TransactionStatus{}, rpccore.ErrTxnHashNotFound
+			return TransactionStatus{}, rpccore.ErrTxnHashNotFound
 		}
 		return status, nil
 	}
-	return rpcv9.TransactionStatus{}, txErr
+	return TransactionStatus{}, txErr
 }
 
 /****************************************************
@@ -400,7 +393,7 @@ func (h *Handler) TransactionByHash(
 //
 //nolint:lll // URL exceeds line limit
 func (h *Handler) TransactionByBlockIDAndIndex(
-	blockID *rpcv9.BlockID, txIndex int, responseFlags ResponseFlags,
+	blockID *BlockID, txIndex int, responseFlags ResponseFlags,
 ) (*Transaction, *jsonrpc.Error) {
 	includeProofFacts := responseFlags.IncludeProofFacts
 
@@ -462,7 +455,7 @@ func (h *Handler) TransactionByBlockIDAndIndex(
 // https://github.com/starkware-libs/starknet-specs/blob/master/api/starknet_api_openrpc.json#L222
 func (h *Handler) TransactionReceiptByHash(
 	hash *felt.Felt,
-) (*rpcv9.TransactionReceipt, *jsonrpc.Error) {
+) (*TransactionReceipt, *jsonrpc.Error) {
 	adaptedReceipt, rpcErr := h.getPendingTransactionReceipt(hash)
 	if rpcErr == nil {
 		return adaptedReceipt, nil
@@ -497,12 +490,12 @@ func (h *Handler) TransactionReceiptByHash(
 		return nil, jsonErr
 	}
 
-	status := rpcv9.TxnAcceptedOnL2
+	status := TxnAcceptedOnL2
 	if isL1Verified(blockNumber, l1H) {
-		status = rpcv9.TxnAcceptedOnL1
+		status = TxnAcceptedOnL1
 	}
 
-	return rpcv9.AdaptReceiptWithBlockInfo(
+	return AdaptReceiptWithBlockInfo(
 		&receipt,
 		txn,
 		status,
@@ -516,7 +509,7 @@ func (h *Handler) TransactionReceiptByHash(
 // Returns the receipt if found, otherwise returns `rpccore.ErrTxnHashNotFound`.
 func (h *Handler) getPendingTransactionReceipt(
 	hash *felt.Felt,
-) (*rpcv9.TransactionReceipt, *jsonrpc.Error) {
+) (*TransactionReceipt, *jsonrpc.Error) {
 	pending, err := h.PendingData()
 	if err != nil {
 		return nil, rpccore.ErrTxnHashNotFound
@@ -532,15 +525,15 @@ func (h *Handler) getPendingTransactionReceipt(
 		return nil, rpccore.ErrTxnHashNotFound
 	}
 
-	status := rpcv9.TxnPreConfirmed
+	status := TxnPreConfirmed
 	isPreLatest := false
 	if parentHash != nil {
 		// pre-latest block or pending block
-		status = rpcv9.TxnAcceptedOnL2
+		status = TxnAcceptedOnL2
 		// If pending data is pre_confirmed receipt is coming from pre_latest
 		isPreLatest = pending.Variant() == core.PreConfirmedBlockVariant
 	}
-	return rpcv9.AdaptReceiptWithBlockInfo(
+	return AdaptReceiptWithBlockInfo(
 		receipt,
 		txn,
 		status,
