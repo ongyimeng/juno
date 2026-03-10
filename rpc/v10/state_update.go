@@ -75,7 +75,7 @@ type MigratedCompiledClass struct {
 // https://github.com/starkware-libs/starknet-specs/blob/9377851884da5c81f757b6ae0ed47e84f9e7c058/api/starknet_api_openrpc.json#L136 //nolint:lll
 //
 //nolint:lll // URL exceeds line limit but should remain intact for reference
-func (h *Handler) StateUpdate(id *BlockID) (StateUpdate, *jsonrpc.Error) {
+func (h *Handler) StateUpdate(id *BlockID, contractAddresses AddressList) (StateUpdate, *jsonrpc.Error) {
 	update, err := h.stateUpdateByID(id)
 	if err != nil {
 		if errors.Is(err, db.ErrKeyNotFound) || errors.Is(err, core.ErrPendingDataNotFound) {
@@ -84,16 +84,21 @@ func (h *Handler) StateUpdate(id *BlockID) (StateUpdate, *jsonrpc.Error) {
 		return StateUpdate{}, rpccore.ErrInternal.CloneWithData(err)
 	}
 
-	index := 0
-	nonces := make([]Nonce, len(update.StateDiff.Nonces))
+	nonces := make([]Nonce, 0, len(update.StateDiff.Nonces))
 	for addr, nonce := range update.StateDiff.Nonces {
-		nonces[index] = Nonce{ContractAddress: addr, Nonce: *nonce}
-		index++
+		if contractAddresses.Contains((*felt.Address)(&addr)) {
+			nonces = append(nonces, Nonce{
+				ContractAddress: addr,
+				Nonce:           *nonce,
+			})
+		}
 	}
 
-	index = 0
-	storageDiffs := make([]StorageDiff, len(update.StateDiff.StorageDiffs))
+	storageDiffs := make([]StorageDiff, 0, len(update.StateDiff.StorageDiffs))
 	for addr, diffs := range update.StateDiff.StorageDiffs {
+		if !contractAddresses.Contains((*felt.Address)(&addr)) {
+			continue
+		}
 		entries := make([]Entry, len(diffs))
 		entryIdx := 0
 		for key, value := range diffs {
@@ -103,25 +108,23 @@ func (h *Handler) StateUpdate(id *BlockID) (StateUpdate, *jsonrpc.Error) {
 			}
 			entryIdx++
 		}
-
-		storageDiffs[index] = StorageDiff{
+		storageDiffs = append(storageDiffs, StorageDiff{
 			Address:        addr,
 			StorageEntries: entries,
-		}
-		index++
+		})
 	}
 
-	index = 0
-	deployedContracts := make([]DeployedContract, len(update.StateDiff.DeployedContracts))
+	deployedContracts := make([]DeployedContract, 0, len(update.StateDiff.DeployedContracts))
 	for addr, classHash := range update.StateDiff.DeployedContracts {
-		deployedContracts[index] = DeployedContract{
-			Address:   addr,
-			ClassHash: *classHash,
+		if contractAddresses.Contains((*felt.Address)(&addr)) {
+			deployedContracts = append(deployedContracts, DeployedContract{
+				Address:   addr,
+				ClassHash: *classHash,
+			})
 		}
-		index++
 	}
 
-	index = 0
+	index := 0
 	declaredClasses := make([]DeclaredClass, len(update.StateDiff.DeclaredV1Classes))
 	for classHash, compiledClassHash := range update.StateDiff.DeclaredV1Classes {
 		declaredClasses[index] = DeclaredClass{
@@ -131,14 +134,14 @@ func (h *Handler) StateUpdate(id *BlockID) (StateUpdate, *jsonrpc.Error) {
 		index++
 	}
 
-	index = 0
-	replacedClasses := make([]ReplacedClass, len(update.StateDiff.ReplacedClasses))
+	replacedClasses := make([]ReplacedClass, 0, len(update.StateDiff.ReplacedClasses))
 	for addr, classHash := range update.StateDiff.ReplacedClasses {
-		replacedClasses[index] = ReplacedClass{
-			ClassHash:       *classHash,
-			ContractAddress: addr,
+		if contractAddresses.Contains((*felt.Address)(&addr)) {
+			replacedClasses = append(replacedClasses, ReplacedClass{
+				ClassHash:       *classHash,
+				ContractAddress: addr,
+			})
 		}
-		index++
 	}
 
 	index = 0
