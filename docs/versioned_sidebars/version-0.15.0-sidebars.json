@@ -11,8 +11,8 @@
         "configuring",
         "updating",
         "tuning",
-        "running-on-gcp",
         "running-on-kubernetes",
+        "running-on-gcp",
         "plugins"
       ]
     },
