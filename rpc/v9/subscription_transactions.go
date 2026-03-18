@@ -86,7 +86,6 @@ func newTransactionsSubscriber(
 
 	if slices.Contains(state.finalityStatus, TxnStatusWithoutL1(TxnStatusAcceptedOnL2)) {
 		s.onNewHead = state.onNewHead
-		s.onPreLatest = state.onPreLatest
 	}
 
 	if slices.ContainsFunc(
@@ -96,6 +95,7 @@ func newTransactionsSubscriber(
 				status == TxnStatusWithoutL1(TxnStatusCandidate)
 		}) {
 		s.onPendingData = state.onPendingData
+		s.onPreLatest = state.onPreLatest
 	}
 
 	return s, nil
@@ -133,7 +133,7 @@ func (s *transactionsSubscriberState) onPreLatest(
 	return s.processBlock(
 		id,
 		preLatest.Block,
-		TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
+		TxnStatusWithoutL1(TxnStatusPreConfirmed),
 	)
 }
 

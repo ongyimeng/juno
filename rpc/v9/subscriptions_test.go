@@ -287,7 +287,7 @@ func TestSubscribeEvents(t *testing.T) {
 		b2PreLatest.Block,
 		nil,
 		nil,
-		TxnAcceptedOnL2,
+		TxnPreConfirmed,
 		true,
 	)
 
@@ -537,11 +537,11 @@ func TestSubscribeEvents(t *testing.T) {
 				expect: [][]SubscriptionEmittedEvent{b2PreLatestEmitted},
 			},
 			{
-				description: "on new head after PreLatest, without duplicates",
+				description: "on new head after PreLatest",
 				notify: func() {
 					handler.newHeads.Send(b2)
 				},
-				expect: [][]SubscriptionEmittedEvent{},
+				expect: [][]SubscriptionEmittedEvent{b2Emitted},
 			},
 		},
 	}
@@ -747,7 +747,7 @@ func TestSubscribeEvents(t *testing.T) {
 				notify: func() {
 					handler.preLatestFeed.Send(&b2PreLatest)
 				},
-				expect: [][]SubscriptionEmittedEvent{b2PreLatestEmitted},
+				expect: [][]SubscriptionEmittedEvent{b2PreLatestEmitted[len(b2PreConfirmedExtendedEmitted):]},
 			},
 			{
 				description: "new pre_confirmed block",
@@ -757,11 +757,11 @@ func TestSubscribeEvents(t *testing.T) {
 				expect: [][]SubscriptionEmittedEvent{b3PreConfirmedPartialEmitted},
 			},
 			{
-				description: "prelatest becomes head - without duplicates",
+				description: "prelatest becomes head",
 				notify: func() {
 					handler.newHeads.Send(b2)
 				},
-				expect: [][]SubscriptionEmittedEvent{},
+				expect: [][]SubscriptionEmittedEvent{b2Emitted},
 			},
 			{
 				description: "pre_confirmed update - without duplicates",
@@ -797,11 +797,11 @@ func TestSubscribeEvents(t *testing.T) {
 				},
 			},
 			{
-				description: "prelatest becomes head - without duplicates",
+				description: "prelatest becomes head",
 				notify: func() {
 					handler.newHeads.Send(b2)
 				},
-				expect: [][]SubscriptionEmittedEvent{},
+				expect: [][]SubscriptionEmittedEvent{b2Emitted},
 			},
 			{
 				description: "on pre_confirmed block update, without duplicates",
@@ -1130,9 +1130,11 @@ func TestSubscribeTxnStatus(t *testing.T) {
 		id, conn := createTestTxStatusWebsocket(t, handler, targetTxn.Hash())
 		assertNextTxnStatus(t, conn, id, targetTxn.Hash(), TxnStatusPreConfirmed, TxnSuccess, "")
 
+		// Pre-latest block also has TxnStatusPreConfirmed (same as pre-confirmed since Starknet 0.14.2).
+		// No status update should be emitted when the finality status doesn't change.
 		mockSyncer.EXPECT().PendingData().Return(preConfirmedData2, nil)
 		handler.preLatestFeed.Send(preLatest)
-		assertNextTxnStatus(t, conn, id, targetTxn.Hash(), TxnStatusAcceptedOnL2, TxnSuccess, "")
+		assertNoEvents(t, conn, 50*time.Millisecond)
 	})
 }
 
@@ -1542,23 +1544,23 @@ func TestSubscribeNewTransactions(t *testing.T) {
 				expect: [][]*SubscriptionNewTransaction{},
 			},
 			{
-				description: "pre_confirmed becomes pre_latest",
+				description: "pre_confirmed becomes pre_latest (no stream for ACCEPTED_ON_L2-only subscriber)",
 				notify: func() {
 					syncer.preLatest.Send(&b2PreLatest)
 				},
-				expect: [][]*SubscriptionNewTransaction{
-					toTransactionsWithFinalityStatus(
-						b2PreLatest.Block.Transactions,
-						TxnStatusWithoutL1(TxnAcceptedOnL2),
-					),
-				},
+				expect: [][]*SubscriptionNewTransaction{},
 			},
 			{
-				description: "pre_latest become new head, without duplicates",
+				description: "pre_latest become new head",
 				notify: func() {
 					syncer.newHeads.Send(newHead2)
 				},
-				expect: [][]*SubscriptionNewTransaction{},
+				expect: [][]*SubscriptionNewTransaction{
+					toTransactionsWithFinalityStatus(
+						newHead2.Transactions,
+						TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
+					),
+				},
 			},
 		},
 	}
@@ -1731,23 +1733,23 @@ func TestSubscribeNewTransactions(t *testing.T) {
 				},
 			},
 			{
-				description: "pre_confirmed becomes pre_latest",
+				description: "pre_confirmed becomes pre_latest - without duplicates",
 				notify: func() {
 					syncer.preLatest.Send(&b2PreLatest)
 				},
-				expect: [][]*SubscriptionNewTransaction{
-					toTransactionsWithFinalityStatus(
-						b2PreLatest.Block.Transactions,
-						TxnStatusWithoutL1(TxnAcceptedOnL2),
-					),
-				},
+				expect: [][]*SubscriptionNewTransaction{},
 			},
 			{
-				description: "pre_latest becomes new head, without duplicates",
+				description: "pre_latest becomes new head",
 				notify: func() {
 					syncer.newHeads.Send(newHead2)
 				},
-				expect: [][]*SubscriptionNewTransaction{},
+				expect: [][]*SubscriptionNewTransaction{
+					toTransactionsWithFinalityStatus(
+						newHead2.Transactions,
+						TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
+					),
+				},
 			},
 		},
 	}
@@ -1816,42 +1818,42 @@ func TestSubscribeNewTransactions(t *testing.T) {
 		senderAddress: nil,
 		steps: []stepInfo{
 			{
-				description: "on pre-latest block",
+				description: "on pre-latest block (no stream for ACCEPTED_ON_L2-only subscriber)",
 				notify: func() {
 					syncer.preLatest.Send(&b1PreLatest)
 				},
-				expect: [][]*SubscriptionNewTransaction{
-					toTransactionsWithFinalityStatus(
-						b1PreLatest.Block.Transactions,
-						TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
-					),
-				},
+				expect: [][]*SubscriptionNewTransaction{},
 			},
 			{
-				description: "pre-latest becomes new head, without duplicates",
+				description: "pre-latest becomes new head",
 				notify: func() {
 					syncer.newHeads.Send(newHead1)
 				},
-				expect: [][]*SubscriptionNewTransaction{},
-			},
-			{
-				description: "on new pre-latest block",
-				notify: func() {
-					syncer.preLatest.Send(&b2PreLatest)
-				},
 				expect: [][]*SubscriptionNewTransaction{
 					toTransactionsWithFinalityStatus(
-						b2PreLatest.Block.Transactions,
+						newHead1.Transactions,
 						TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
 					),
 				},
 			},
 			{
-				description: "pre-latest becomes new head, without duplicates",
+				description: "on new pre-latest block (no stream for ACCEPTED_ON_L2-only subscriber)",
+				notify: func() {
+					syncer.preLatest.Send(&b2PreLatest)
+				},
+				expect: [][]*SubscriptionNewTransaction{},
+			},
+			{
+				description: "pre-latest becomes new head",
 				notify: func() {
 					syncer.newHeads.Send(newHead2)
 				},
-				expect: [][]*SubscriptionNewTransaction{},
+				expect: [][]*SubscriptionNewTransaction{
+					toTransactionsWithFinalityStatus(
+						newHead2.Transactions,
+						TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
+					),
+				},
 			},
 		},
 	}
@@ -1901,8 +1903,8 @@ func TestSubscribeNewTransactions(t *testing.T) {
 				},
 				expect: [][]*SubscriptionNewTransaction{
 					toTransactionsWithFinalityStatus(
-						b1PreLatest.Block.Transactions,
-						TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
+						b1PreLatest.Block.Transactions[extendedPreConfirmedCount:],
+						TxnStatusWithoutL1(TxnStatusPreConfirmed),
 					),
 				},
 			},
@@ -1923,11 +1925,16 @@ func TestSubscribeNewTransactions(t *testing.T) {
 				},
 			},
 			{
-				description: "prelatest becomes head - without duplicates",
+				description: "prelatest becomes head",
 				notify: func() {
 					syncer.newHeads.Send(newHead1)
 				},
-				expect: [][]*SubscriptionNewTransaction{},
+				expect: [][]*SubscriptionNewTransaction{
+					toTransactionsWithFinalityStatus(
+						newHead1.Transactions,
+						TxnStatusWithoutL1(TxnStatusAcceptedOnL2),
+					),
+				},
 			},
 			{
 				description: "pre_confirmed update - without duplicates",
@@ -2295,18 +2302,11 @@ func TestSubscribeTransactionReceipts(t *testing.T) {
 		statuses:    nil,
 		steps: []stepInfo{
 			{
-				description: "on pre-latest block",
+				description: "on pre-latest block (no stream for ACCEPTED_ON_L2-only subscriber)",
 				notify: func() {
 					syncer.preLatest.Send(&b1PreLatest)
 				},
-				expect: [][]*TransactionReceipt{
-					toAdaptedReceiptsWithFilter(
-						b1PreLatest.Block,
-						nil,
-						TxnAcceptedOnL2,
-						true,
-					),
-				},
+				expect: [][]*TransactionReceipt{},
 			},
 			{
 				description: "on new pre-confirmed block - no stream",
@@ -2316,32 +2316,39 @@ func TestSubscribeTransactionReceipts(t *testing.T) {
 				expect: [][]*TransactionReceipt{},
 			},
 			{
-				description: "pre-latest becomes new head, without duplicates",
+				description: "pre-latest becomes new head",
 				notify: func() {
 					syncer.newHeads.Send(newHead1)
 				},
-				expect: [][]*TransactionReceipt{},
-			},
-			{
-				description: "pre-confirmed becomes pre-latest",
-				notify: func() {
-					syncer.preLatest.Send(&b2PreLatest)
-				},
 				expect: [][]*TransactionReceipt{
 					toAdaptedReceiptsWithFilter(
-						b2PreLatest.Block,
+						newHead1,
 						nil,
 						TxnAcceptedOnL2,
-						true,
+						false,
 					),
 				},
 			},
 			{
-				description: "pre-latest becomes new head, without duplicates",
+				description: "pre-confirmed becomes pre-latest (no stream for ACCEPTED_ON_L2-only subscriber)",
+				notify: func() {
+					syncer.preLatest.Send(&b2PreLatest)
+				},
+				expect: [][]*TransactionReceipt{},
+			},
+			{
+				description: "pre-latest becomes new head",
 				notify: func() {
 					syncer.newHeads.Send(newHead2)
 				},
-				expect: [][]*TransactionReceipt{},
+				expect: [][]*TransactionReceipt{
+					toAdaptedReceiptsWithFilter(
+						newHead2,
+						nil,
+						TxnAcceptedOnL2,
+						false,
+					),
+				},
 			},
 		},
 	}
@@ -2390,9 +2397,9 @@ func TestSubscribeTransactionReceipts(t *testing.T) {
 					toAdaptedReceiptsWithFilter(
 						b1PreLatest.Block,
 						nil,
-						TxnAcceptedOnL2,
+						TxnPreConfirmed,
 						true,
-					),
+					)[extendedPreConfirmedCount:],
 				},
 			},
 			{
@@ -2410,11 +2417,18 @@ func TestSubscribeTransactionReceipts(t *testing.T) {
 				},
 			},
 			{
-				description: "prelatest becomes head - without duplicates",
+				description: "prelatest becomes head",
 				notify: func() {
 					syncer.newHeads.Send(newHead1)
 				},
-				expect: [][]*TransactionReceipt{},
+				expect: [][]*TransactionReceipt{
+					toAdaptedReceiptsWithFilter(
+						newHead1,
+						nil,
+						TxnAcceptedOnL2,
+						false,
+					),
+				},
 			},
 			{
 				description: "pre_confirmed update - without duplicates",
@@ -2699,6 +2713,7 @@ func assertNextEvents(
 	}
 }
 
+//nolint:unparam // waitDuration is always 50ms in tests but kept as a param for clarity
 func assertNoEvents(t *testing.T, conn net.Conn, waitDuration time.Duration) {
 	t.Helper()
 
