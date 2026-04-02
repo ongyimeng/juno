@@ -2,7 +2,6 @@ package rpcv10
 
 import (
 	"context"
-	"fmt"
 	"slices"
 
 	"github.com/NethermindEth/juno/core"
@@ -108,7 +107,6 @@ func (s *receiptsSubscriberState) onNewHead(
 		id,
 		head,
 		TxnFinalityStatusWithoutL1(TxnAcceptedOnL2),
-		false,
 	)
 }
 
@@ -122,7 +120,6 @@ func (s *receiptsSubscriberState) onPreLatest(
 		id,
 		preLatest.Block,
 		TxnFinalityStatusWithoutL1(TxnPreConfirmed),
-		true,
 	)
 }
 
@@ -132,15 +129,10 @@ func (s *receiptsSubscriberState) onPendingData(
 	_ *subscription,
 	pending core.PendingData,
 ) error {
-	if pending.Variant() != core.PreConfirmedBlockVariant {
-		return fmt.Errorf("unexpected pending data variant %v", pending.Variant())
-	}
-
 	return s.processBlock(
 		id,
 		pending.GetBlock(),
 		TxnFinalityStatusWithoutL1(TxnPreConfirmed),
-		false,
 	)
 }
 
@@ -148,7 +140,6 @@ func (s *receiptsSubscriberState) processBlock(
 	id string,
 	block *core.Block,
 	finalityStatus TxnFinalityStatusWithoutL1,
-	isPreLatest bool,
 ) error {
 	for i, txn := range block.Transactions {
 		if !filterTxBySender(txn, s.senderAddr) {
@@ -161,7 +152,6 @@ func (s *receiptsSubscriberState) processBlock(
 			TxnFinalityStatus(finalityStatus),
 			block.Hash,
 			block.Number,
-			isPreLatest,
 		)
 
 		sentReceipt := SentReceipt{

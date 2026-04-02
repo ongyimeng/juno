@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NethermindEth/juno/core"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/mocks"
@@ -114,22 +113,8 @@ func TestNonce(t *testing.T) {
 	})
 	//nolint:dupl //  similar structure with nonce test, different endpoint.
 	t.Run("blockID - pending", func(t *testing.T) {
-		pendingStateDiff := core.EmptyStateDiff()
-		pendingStateDiff.Nonces[targetAddress] = expectedNonce
-
-		pending := core.Pending{
-			Block: &core.Block{
-				Header: &core.Header{
-					ParentHash: felt.NewFromUint64[felt.Felt](2),
-				},
-			},
-			StateUpdate: &core.StateUpdate{
-				StateDiff: &pendingStateDiff,
-			},
-		}
-
-		mockSyncReader.EXPECT().PendingData().Return(&pending, nil)
-		mockReader.EXPECT().StateAtBlockHash(pending.Block.ParentHash).Return(mockState, nopCloser, nil)
+		mockReader.EXPECT().HeadState().Return(mockState, nopCloser, nil)
+		mockState.EXPECT().ContractNonce(&targetAddress).Return(*expectedNonce, nil)
 
 		nonce, rpcErr := handler.Nonce(
 			rpc.BlockID{Pending: true},
@@ -291,25 +276,9 @@ func TestStorageAt(t *testing.T) {
 	})
 
 	t.Run("blockID - pending", func(t *testing.T) {
-		stateDiff := core.EmptyStateDiff()
-		stateDiff.
-			StorageDiffs[targetAddress] = map[felt.Felt]*felt.Felt{targetSlot: expectedStorage}
-		stateDiff.
-			DeployedContracts[targetAddress] = felt.NewFromUint64[felt.Felt](123456789)
-
-		pending := core.Pending{
-			Block: &core.Block{
-				Header: &core.Header{
-					ParentHash: felt.NewFromUint64[felt.Felt](2),
-				},
-			},
-			StateUpdate: &core.StateUpdate{
-				StateDiff: &stateDiff,
-			},
-		}
-		mockSyncReader.EXPECT().PendingData().Return(&pending, nil)
-		mockReader.EXPECT().StateAtBlockHash(pending.Block.ParentHash).
-			Return(mockState, nopCloser, nil)
+		mockReader.EXPECT().HeadState().Return(mockState, nopCloser, nil)
+		mockState.EXPECT().ContractClassHash(&targetAddress).Return(felt.Felt{}, nil)
+		mockState.EXPECT().ContractStorage(&targetAddress, &targetSlot).Return(*expectedStorage, nil)
 
 		storageValue, rpcErr := handler.StorageAt(
 			targetAddress,

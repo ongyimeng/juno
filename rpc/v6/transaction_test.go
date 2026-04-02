@@ -18,6 +18,7 @@ import (
 	rpc "github.com/NethermindEth/juno/rpc/v6"
 	"github.com/NethermindEth/juno/starknet"
 	adaptfeeder "github.com/NethermindEth/juno/starknetdata/feeder"
+	"github.com/NethermindEth/juno/sync/pendingdata"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,7 +52,6 @@ func TestTransactionByHashNotFound(t *testing.T) {
 		randomTxHash := new(felt.Felt).SetBytes([]byte("random hash"))
 		mockReader.EXPECT().TransactionByHash(randomTxHash).Return(nil, db.ErrKeyNotFound)
 		mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
-		mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
 
 		n := &utils.Mainnet
 		handler := rpc.New(mockReader, mockSyncReader, nil, n, nil)
@@ -59,59 +59,6 @@ func TestTransactionByHashNotFound(t *testing.T) {
 
 		assert.Nil(t, tx)
 		assert.Equal(t, rpccore.ErrTxnHashNotFound, rpcErr)
-	})
-
-	t.Run("tx found in pending block", func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-		t.Cleanup(mockCtrl.Finish)
-		mockReader := mocks.NewMockReader(mockCtrl)
-		mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
-
-		n := &utils.Mainnet
-		client := feeder.NewTestClient(t, n)
-		mainnetGw := adaptfeeder.New(client)
-
-		block, err := mainnetGw.BlockByNumber(t.Context(), 19199)
-		require.NoError(t, err)
-
-		txAtIdx1InBlock := felt.NewUnsafeFromString[felt.Felt]("0x5f3d9e538af40474c894820d2c0d0e8f92ee8fef92e2254f0b06e306f88dcc8")
-		mockReader.EXPECT().TransactionByHash(txAtIdx1InBlock).Return(nil, db.ErrKeyNotFound)
-		pending := core.NewPending(block, nil, nil)
-		mockSyncReader.EXPECT().PendingData().Return(
-			&pending,
-			nil,
-		)
-
-		handler := rpc.New(mockReader, mockSyncReader, nil, n, nil)
-		tx, rpcErr := handler.TransactionByHash(*txAtIdx1InBlock)
-
-		expectedTx := rpc.Transaction{
-			Type:    rpc.TxnInvoke,
-			Hash:    txAtIdx1InBlock,
-			MaxFee:  felt.NewUnsafeFromString[felt.Felt]("0x65d5eabc5218"),
-			Version: felt.NewUnsafeFromString[felt.Felt]("0x0"),
-			Signature: &[]*felt.Felt{
-				felt.NewUnsafeFromString[felt.Felt]("0x2ccb8d2b482d67d8358482832705549d1e5278dc4d04878d9f8256a47423d6a"),
-				felt.NewUnsafeFromString[felt.Felt]("0x6958e023ab0ffa07a84bd4e79032a5f2312ca4a2937585e49534877d13ea918"),
-			},
-			Nonce: nil,
-			CallData: &[]*felt.Felt{
-				felt.NewUnsafeFromString[felt.Felt]("0x1"),
-				felt.NewUnsafeFromString[felt.Felt]("0x4a4479e16bf55ebbe7ccb36f438060d994fac69c75e2edfaf00ae56d45d5796"),
-				felt.NewUnsafeFromString[felt.Felt]("0x1474f761b9a93b1c727b60fb4cc7aa6c6c1c866ad7f1cd88ec9545ff065ddad"),
-				felt.NewUnsafeFromString[felt.Felt]("0x0"),
-				felt.NewUnsafeFromString[felt.Felt]("0x1"),
-				felt.NewUnsafeFromString[felt.Felt]("0x1"),
-				felt.NewUnsafeFromString[felt.Felt]("0x6b648b36b074a91eee55730f5f5e075ec19c0a8f9ffb0903cefeee93b6ff328"),
-				felt.NewUnsafeFromString[felt.Felt]("0x7d1"),
-			},
-			ContractAddress:    felt.NewUnsafeFromString[felt.Felt]("0x4a4479e16bf55ebbe7ccb36f438060d994fac69c75e2edfaf00ae56d45d5796"),
-			SenderAddress:      nil,
-			EntryPointSelector: felt.NewUnsafeFromString[felt.Felt]("0x15d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad"),
-		}
-
-		assert.Nil(t, rpcErr)
-		assert.Equal(t, &expectedTx, tx)
 	})
 
 	t.Run("tx not found anywhere", func(t *testing.T) {
@@ -129,11 +76,13 @@ func TestTransactionByHashNotFound(t *testing.T) {
 
 		randomTxHash := new(felt.Felt).SetBytes([]byte("random hash"))
 		mockReader.EXPECT().TransactionByHash(randomTxHash).Return(nil, db.ErrKeyNotFound)
-		pending := core.NewPending(block, nil, nil)
-		mockSyncReader.EXPECT().PendingData().Return(
-			&pending,
-			nil,
-		)
+		mockReader.EXPECT().HeadsHeader().Return(block.Header, nil)
+		blockToRegisterNum := block.Header.Number + 1 - pendingdata.BlockHashLag
+		mockReader.EXPECT().BlockHeaderByNumber(blockToRegisterNum).Return(
+			&core.Header{
+				Number: blockToRegisterNum,
+				Hash:   felt.NewFromUint64[felt.Felt](blockToRegisterNum),
+			}, nil)
 
 		handler := rpc.New(mockReader, mockSyncReader, nil, n, nil)
 		tx, rpcErr := handler.TransactionByHash(*randomTxHash)
@@ -575,28 +524,24 @@ func TestTransactionByBlockIdAndIndex(t *testing.T) {
 		assert.Equal(t, txn1, txn2)
 	})
 
-	t.Run("blockID - pending", func(t *testing.T) {
+	t.Run("blockID - pending always returns invalid index", func(t *testing.T) {
 		index := rand.Intn(int(latestBlock.TransactionCount))
 
 		latestBlock.Hash = nil
 		latestBlock.GlobalStateRoot = nil
-		pending := core.NewPending(latestBlock, nil, nil)
-		mockSyncReader.EXPECT().PendingData().Return(
-			&pending,
-			nil,
-		)
-		mockReader.EXPECT().TransactionByHash(latestBlock.Transactions[index].Hash()).DoAndReturn(
-			func(hash *felt.Felt) (core.Transaction, error) {
-				return latestBlock.Transactions[index], nil
-			})
+		// PendingData() returns empty placeholder - HeadsHeader + BlockHeaderByNumber are called
+		mockReader.EXPECT().HeadsHeader().Return(latestBlock.Header, nil)
+		blockToRegisterNum := latestBlock.Header.Number + 1 - pendingdata.BlockHashLag
+		mockReader.EXPECT().BlockHeaderByNumber(blockToRegisterNum).Return(
+			&core.Header{
+				Number: blockToRegisterNum,
+				Hash:   felt.NewFromUint64[felt.Felt](blockToRegisterNum),
+			}, nil)
 
+		// placeholder block has 0 transactions, so any index is invalid
 		txn1, rpcErr := handler.TransactionByBlockIDAndIndex(rpc.BlockID{Pending: true}, index)
-		require.Nil(t, rpcErr)
-
-		txn2, rpcErr := handler.TransactionByHash(*latestBlock.Transactions[index].Hash())
-		require.Nil(t, rpcErr)
-
-		assert.Equal(t, txn1, txn2)
+		assert.Nil(t, txn1)
+		assert.Equal(t, rpccore.ErrInvalidTxIndex, rpcErr)
 	})
 }
 
@@ -626,7 +571,6 @@ func TestTransactionReceiptByHash(t *testing.T) {
 		handler := rpc.New(mockReader, mockSyncReader, nil, &utils.Sepolia, nil)
 
 		mockReader.EXPECT().TransactionByHash(gomock.Any()).Return(nil, db.ErrKeyNotFound)
-		mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
 		mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
 
 		txHash := new(felt.Felt).SetBytes([]byte("some tx hash"))
@@ -636,7 +580,7 @@ func TestTransactionReceiptByHash(t *testing.T) {
 		assert.Equal(t, rpccore.ErrTxnHashNotFound, rpcErr)
 	})
 
-	t.Run("not found in non-nil pending block", func(t *testing.T) {
+	t.Run("not found in empty pending block", func(t *testing.T) {
 		mockCtrl := gomock.NewController(t)
 		t.Cleanup(mockCtrl.Finish)
 
@@ -647,14 +591,16 @@ func TestTransactionReceiptByHash(t *testing.T) {
 
 		mockReader.EXPECT().TransactionByHash(gomock.Any()).Return(nil, db.ErrKeyNotFound)
 
-		client := feeder.NewTestClient(t, n)
-		gateway := adaptfeeder.New(client)
-		mockSyncReader.EXPECT().PendingData().DoAndReturn(func() (core.PendingData, error) {
-			block, err := gateway.BlockByNumber(t.Context(), 4850)
-			require.NoError(t, err)
-			pending := core.NewPending(block, nil, nil)
-			return &pending, nil
-		})
+		// PendingData() always returns empty placeholder - add required mocks
+		const sepoliaBlock = uint64(4850)
+		stubHeader := &core.Header{Number: sepoliaBlock, Hash: new(felt.Felt).SetUint64(sepoliaBlock)}
+		mockReader.EXPECT().HeadsHeader().Return(stubHeader, nil)
+		blockToRegisterNum := sepoliaBlock + 1 - pendingdata.BlockHashLag
+		mockReader.EXPECT().BlockHeaderByNumber(blockToRegisterNum).Return(
+			&core.Header{
+				Number: blockToRegisterNum,
+				Hash:   felt.NewFromUint64[felt.Felt](blockToRegisterNum),
+			}, nil)
 
 		unexistingTxHashInBlock := felt.NewUnsafeFromString[felt.Felt]("0x123")
 		tx, rpcErr := handler.TransactionReceiptByHash(*unexistingTxHashInBlock)
@@ -712,69 +658,6 @@ func TestTransactionReceiptByHash(t *testing.T) {
 
 		assert.Nil(t, txReceipt)
 		assert.Equal(t, jsonrpc.Err(jsonrpc.InternalError, "some internal error"), rpcErr)
-	})
-
-	t.Run("found in pending block", func(t *testing.T) {
-		mockCtrl := gomock.NewController(t)
-		t.Cleanup(mockCtrl.Finish)
-
-		mockReader := mocks.NewMockReader(mockCtrl)
-		mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
-		n := &utils.Sepolia
-		handler := rpc.New(mockReader, mockSyncReader, nil, n, nil)
-
-		mockReader.EXPECT().TransactionByHash(gomock.Any()).Return(nil, db.ErrKeyNotFound)
-
-		client := feeder.NewTestClient(t, n)
-		gateway := adaptfeeder.New(client)
-		mockSyncReader.EXPECT().PendingData().DoAndReturn(func() (core.PendingData, error) {
-			block, err := gateway.BlockByNumber(t.Context(), 4850)
-			require.NoError(t, err)
-
-			pending := core.NewPending(block, nil, nil)
-			return &pending, nil
-		})
-
-		tx0HashInBlock4850 := felt.NewUnsafeFromString[felt.Felt]("0x236102aee88702cfa0546d84e54967e3de1ec6b784bc27364bbbdd25931140c")
-		txReceipt, rpcErr := handler.TransactionReceiptByHash(*tx0HashInBlock4850)
-
-		expectedReceipt := rpc.TransactionReceipt{
-			FinalityStatus:  rpc.TxnPending,
-			ExecutionStatus: rpc.TxnSuccess,
-			Type:            rpc.TxnInvoke,
-			Hash:            tx0HashInBlock4850,
-			ActualFee: &rpc.FeePayment{
-				Amount: felt.NewUnsafeFromString[felt.Felt]("0x4e7f9f784c0"),
-				Unit:   rpc.WEI,
-			},
-			// nil because pending block
-			BlockHash:    nil,
-			BlockNumber:  nil,
-			MessagesSent: []*rpc.MsgToL1{},
-			Events: []*rpc.Event{{
-				From: felt.NewUnsafeFromString[felt.Felt]("0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"),
-				Keys: []*felt.Felt{
-					felt.NewUnsafeFromString[felt.Felt]("0x99cd8bde557814842a3121e8ddfd433a539b8c9f14bf31ebf108d12e6196e9"),
-				},
-				Data: []*felt.Felt{
-					felt.NewUnsafeFromString[felt.Felt]("0x60664b576dae484dc3430ed3b1036e7879712e2c2c2728f568b8dbcbbc0f655"),
-					felt.NewUnsafeFromString[felt.Felt]("0x1176a1bd84444c89232ec27754698e5d2e7e1a7f1539f12027f28b23ec9f3d8"),
-					felt.NewUnsafeFromString[felt.Felt]("0x4e7f9f784c0"),
-					felt.NewUnsafeFromString[felt.Felt]("0x0"),
-				},
-			}},
-			ExecutionResources: &rpc.ExecutionResources{
-				ComputationResources: rpc.ComputationResources{
-					Steps:      6172,
-					Pedersen:   16,
-					RangeCheck: 208,
-					Ecdsa:      1,
-				},
-			},
-		}
-
-		assert.Nil(t, rpcErr)
-		assert.Equal(t, &expectedReceipt, txReceipt)
 	})
 
 	t.Run("found in (non-pending) block", func(t *testing.T) {
@@ -1556,7 +1439,6 @@ func TestTransactionStatus(t *testing.T) {
 						mockReader := mocks.NewMockReader(mockCtrl)
 						syncReader := mocks.NewMockSyncReader(mockCtrl)
 						mockReader.EXPECT().TransactionByHash(notFoundTest.hash).Return(nil, db.ErrKeyNotFound).Times(2)
-						syncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound).Times(2)
 						handler := rpc.New(mockReader, syncReader, nil, test.network, nil)
 						mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound).Times(2)
 						_, err := handler.TransactionStatus(ctx, *notFoundTest.hash)
@@ -1575,7 +1457,6 @@ func TestTransactionStatus(t *testing.T) {
 				mockReader := mocks.NewMockReader(mockCtrl)
 				syncReader := mocks.NewMockSyncReader(mockCtrl)
 				mockReader.EXPECT().TransactionByHash(test.notFoundTxHash).Return(nil, db.ErrKeyNotFound)
-				syncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
 				mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
 				handler := rpc.New(mockReader, syncReader, nil, test.network, nil).WithFeeder(client)
 
@@ -1748,7 +1629,6 @@ func TestSubmittedTransactionsCache(t *testing.T) {
 		res, err := handler.AddTransaction(ctx, broadcastedTxn)
 		require.Nil(t, err)
 		mockReader.EXPECT().TransactionByHash(res.TransactionHash).Return(nil, db.ErrKeyNotFound)
-		mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
 		mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
 
 		status, err := handler.TransactionStatus(ctx, *res.TransactionHash)
@@ -1776,7 +1656,6 @@ func TestSubmittedTransactionsCache(t *testing.T) {
 		res, err := handler.AddTransaction(ctx, broadcastedTxn)
 		require.Nil(t, err)
 		mockReader.EXPECT().TransactionByHash(res.TransactionHash).Return(nil, db.ErrKeyNotFound)
-		mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
 		mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
 		// Expire cache entry
 		for range rpccore.NumTimeBuckets {

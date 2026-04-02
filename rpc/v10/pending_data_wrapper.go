@@ -22,15 +22,11 @@ func (h *Handler) PendingData() (core.PendingData, error) {
 		return nil, err
 	}
 
-	return pendingdata.MakeEmptyPendingDataForParent(h.bcReader, latestHeader)
-}
-
-func (h *Handler) PendingBlock() *core.Block {
-	pending, err := h.PendingData()
+	emptyPreConfirmed, err := pendingdata.MakeEmptyPreConfirmedForParent(h.bcReader, latestHeader)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return pending.GetBlock()
+	return &emptyPreConfirmed, nil
 }
 
 func (h *Handler) PendingState() (core.StateReader, func() error, error) {

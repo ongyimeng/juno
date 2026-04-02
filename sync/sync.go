@@ -23,10 +23,6 @@ import (
 var (
 	_ service.Service = (*Synchronizer)(nil)
 	_ Reader          = (*Synchronizer)(nil)
-
-	ErrMustSwitchPollingPreConfirmed = errors.New(
-		"reached starknet 0.14.0. node requires switching from pending to polling pre_confirmed blocks",
-	)
 )
 
 const (
@@ -139,7 +135,7 @@ type Synchronizer struct {
 	listener EventListener
 
 	pendingData              atomic.Pointer[core.PendingData]
-	pendingPollInterval      time.Duration
+	preLatestPollInterval    time.Duration
 	preConfirmedPollInterval time.Duration
 
 	catchUpMode bool
@@ -152,7 +148,8 @@ func New(
 	bc *blockchain.Blockchain,
 	dataSource DataSource,
 	log utils.StructuredLogger,
-	pendingPollInterval, preConfirmedPollInterval time.Duration,
+	preLatestPollInterval,
+	preConfirmedPollInterval time.Duration,
 	readOnlyBlockchain bool,
 	database db.KeyValueStore,
 ) *Synchronizer {
@@ -165,7 +162,7 @@ func New(
 		reorgFeed:                feed.New[*ReorgBlockRange](),
 		pendingDataFeed:          feed.New[core.PendingData](),
 		preLatestDataFeed:        feed.New[*core.PreLatest](),
-		pendingPollInterval:      pendingPollInterval,
+		preLatestPollInterval:    preLatestPollInterval,
 		preConfirmedPollInterval: preConfirmedPollInterval,
 		listener:                 &SelectiveListener{},
 		readOnlyBlockchain:       readOnlyBlockchain,
@@ -376,7 +373,10 @@ func (s *Synchronizer) storeTask(
 		return
 	}
 
-	s.storeEmptyPendingData(block.Header)
+	if err := s.storeEmptyPreConfirmed(block.Header, nil); err != nil {
+		s.log.Error("Failed to store empty pre-confirmed data", zap.Error(err))
+	}
+
 	s.listener.OnSyncStepDone(OpStore, block.Number, time.Since(storeTimer))
 
 	highestBlockHeader := s.highestBlockHeader.Load()
@@ -447,7 +447,9 @@ func (s *Synchronizer) revertTask(ctx context.Context, lastPossiblyValidHeight u
 	}
 
 	if lastHead != nil {
-		s.storeEmptyPendingData(lastHead)
+		if err := s.storeEmptyPreConfirmed(lastHead, nil); err != nil {
+			s.log.Error("Failed to store empty pre-confirmed data", zap.Error(err))
+		}
 	}
 }
 
