@@ -111,19 +111,41 @@ jobs:
         run: |
           bash .github/workflow-scripts/verify_deployment.sh ${{ secrets.RPC_URL }} ${{ secrets.AUTH_TOKEN }} ${{ inputs.docker_image_tag }}
 
-  starknet-rs:
+  starknet-rs-rpcv08:
     needs: [deploy]
     uses: ./.github/workflows/starknet-rs-tests.yml
+    with:
+      ref: starknet/v0.15.0
     secrets:
       STARKNET_RPC: ${{ secrets.RPC_URL }}/v0_8?apikey=${{ secrets.AUTH_TOKEN }}
+
+  starknet-rs-rpcv09:
+    needs: [deploy]
+    uses: ./.github/workflows/starknet-rs-tests.yml
+    with:
+      ref: starknet/v0.17.0
+    secrets:
+      STARKNET_RPC: ${{ secrets.RPC_URL }}/v0_9?apikey=${{ secrets.AUTH_TOKEN }}
+
+  starknet-rust-rpcv10:
+    needs: [deploy]
+    uses: ./.github/workflows/starknet-rust-tests.yml
+    with:
+      # Latest master commit. Switch to 0.19.0 once released
+      ref: e437eb33dc44a2c448decd1a7127d69594e08cb8
+    secrets:
+      STARKNET_RPC: ${{ secrets.RPC_URL }}/v0_10?apikey=${{ secrets.AUTH_TOKEN }}
 
   starknet-js-rpcv08:
     needs: [deploy]
     uses: ./.github/workflows/starknet-js-tests.yml
     with:
+      ref: v8.0.0
+      rpc_version: v0_8
       test_mode: ${{ inputs.test_mode }}
     secrets:
       TEST_RPC_URL: ${{ secrets.RPC_URL }}/v0_8?apikey=${{ secrets.AUTH_TOKEN }}
+      TEST_WS_URL: ${{ secrets.WS_RPC_URL }}/v0_8?apikey=${{ secrets.AUTH_TOKEN }}
       TEST_ACCOUNT_ADDRESS: ${{ secrets.TEST_ACCOUNT_ADDRESS }}
       TEST_ACCOUNT_PRIVATE_KEY: ${{ secrets.TEST_ACCOUNT_PRIVATE_KEY }}
 
@@ -131,12 +153,27 @@ jobs:
     needs: [deploy]
     uses: ./.github/workflows/starknet-js-tests.yml
     with:
+      ref: v9.4.2
+      rpc_version: v0_9
       test_mode: ${{ inputs.test_mode }}
     secrets:
       TEST_RPC_URL: ${{ secrets.RPC_URL }}/v0_9?apikey=${{ secrets.AUTH_TOKEN }}
       TEST_WS_URL: ${{ secrets.WS_RPC_URL }}/v0_9?apikey=${{ secrets.AUTH_TOKEN }}
       TEST_ACCOUNT_ADDRESS: ${{ secrets.TEST_ACCOUNT_ADDRESS_2 }}
       TEST_ACCOUNT_PRIVATE_KEY: ${{ secrets.TEST_ACCOUNT_PRIVATE_KEY_2 }}
+
+  starknet-js-rpcv10:
+    needs: [deploy]
+    uses: ./.github/workflows/starknet-js-tests.yml
+    with:
+      ref: v9.4.2
+      rpc_version: v0_10
+      test_mode: ${{ inputs.test_mode }}
+    secrets:
+      TEST_RPC_URL: ${{ secrets.RPC_URL }}/v0_10?apikey=${{ secrets.AUTH_TOKEN }}
+      TEST_WS_URL: ${{ secrets.WS_RPC_URL }}/v0_10?apikey=${{ secrets.AUTH_TOKEN }}
+      TEST_ACCOUNT_ADDRESS: ${{ secrets.TEST_ACCOUNT_ADDRESS_3 }}
+      TEST_ACCOUNT_PRIVATE_KEY: ${{ secrets.TEST_ACCOUNT_PRIVATE_KEY_3 }}
 
   starknet-go-rpcv08:
     needs: [deploy]
