@@ -103,7 +103,7 @@ func TestBlockWithTxHashes(t *testing.T) {
 	var mockSyncReader *mocks.MockSyncReader
 	mockReader := mocks.NewMockReader(mockCtrl)
 
-	for description, id := range errTests { //nolint:dupl
+	for description, id := range errTests {
 		t.Run(description, func(t *testing.T) {
 			log := utils.NewNopZapLogger()
 			n := &utils.Mainnet
@@ -296,7 +296,7 @@ func TestBlockWithTxs(t *testing.T) {
 	var mockSyncReader *mocks.MockSyncReader
 	mockReader := mocks.NewMockReader(mockCtrl)
 
-	for description, id := range errTests { //nolint:dupl
+	for description, id := range errTests {
 		t.Run(description, func(t *testing.T) {
 			log := utils.NewNopZapLogger()
 			n := &utils.Mainnet
