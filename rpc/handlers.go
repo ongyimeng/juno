@@ -384,15 +384,15 @@ func (h *Handler) MethodsV0_9() ([]jsonrpc.Method, string) {
 	return []jsonrpc.Method{
 		{
 			Name:    "starknet_chainId",
-			Handler: h.rpcv6Handler.ChainID,
+			Handler: h.rpcv9Handler.ChainID,
 		},
 		{
 			Name:    "starknet_blockNumber",
-			Handler: h.rpcv6Handler.BlockNumber,
+			Handler: h.rpcv9Handler.BlockNumber,
 		},
 		{
 			Name:    "starknet_blockHashAndNumber",
-			Handler: h.rpcv6Handler.BlockHashAndNumber,
+			Handler: h.rpcv9Handler.BlockHashAndNumber,
 		},
 		{
 			Name:    "starknet_getBlockWithTxHashes",
@@ -431,7 +431,7 @@ func (h *Handler) MethodsV0_9() ([]jsonrpc.Method, string) {
 		},
 		{
 			Name:    "starknet_syncing",
-			Handler: h.rpcv6Handler.Syncing,
+			Handler: h.rpcv9Handler.Syncing,
 		},
 		{
 			Name:    "starknet_getNonce",
