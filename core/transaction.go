@@ -116,10 +116,13 @@ type DataAvailability struct {
 }
 
 type BuiltinInstanceCounter struct {
-	Pedersen     uint64
-	RangeCheck   uint64
-	Bitwise      uint64
-	Output       uint64
+	Pedersen   uint64
+	RangeCheck uint64
+	Bitwise    uint64
+	Output     uint64
+	// todo: Ecsda is a known typo of "Ecdsa" (Elliptic Curve Digital Signature
+	// Algorithm). It is kept as-is to preserve backward compatibility with
+	// CBOR-serialised database entries. Make a small migration to fix this.
 	Ecsda        uint64
 	EcOp         uint64
 	Keccak       uint64
