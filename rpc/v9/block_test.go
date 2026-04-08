@@ -193,10 +193,7 @@ func TestBlockTransactionCount(t *testing.T) {
 	})
 
 	t.Run("non-existent pre_confirmed block", func(t *testing.T) {
-		latestBlock.Hash = nil
-		latestBlock.GlobalStateRoot = nil
-		mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
-		mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
+		mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
 		preConfirmed := blockIDPreConfirmed(t)
 		count, rpcErr := handler.BlockTransactionCount(&preConfirmed)
 		require.Equal(t, rpccore.ErrBlockNotFound, rpcErr)
@@ -288,7 +285,7 @@ func TestBlockWithTxHashes(t *testing.T) {
 
 			if description == "pre_confirmed" {
 				mockSyncReader = mocks.NewMockSyncReader(mockCtrl)
-				mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
+				mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
 			}
 
 			handler := rpc.New(chain, mockSyncReader, nil, log)
@@ -299,6 +296,7 @@ func TestBlockWithTxHashes(t *testing.T) {
 		})
 	}
 
+	mockSyncReader = mocks.NewMockSyncReader(mockCtrl)
 	n := &utils.Sepolia
 	handler := rpc.New(mockReader, mockSyncReader, nil, nil)
 
@@ -485,7 +483,7 @@ func TestBlockWithTxs(t *testing.T) {
 
 			if description == "pre_confirmed" {
 				mockSyncReader = mocks.NewMockSyncReader(mockCtrl)
-				mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
+				mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
 			}
 
 			handler := rpc.New(chain, mockSyncReader, nil, log)

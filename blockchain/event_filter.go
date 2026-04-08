@@ -30,7 +30,7 @@ type EventFilter struct {
 	toBlock       uint64
 	matcher       EventMatcher
 	maxScanned    uint // maximum number of scanned blocks in single call.
-	pendingDataFn func() (core.PendingData, error)
+	pendingDataFn func() (*core.PreConfirmed, error)
 	cachedFilters *AggregatedBloomFilterCache
 	runningFilter *core.RunningEventFilter
 	layout        core.TransactionLayout
@@ -48,7 +48,7 @@ func newEventFilter(
 	contractAddresses []felt.Address,
 	keys [][]felt.Felt,
 	fromBlock, toBlock uint64,
-	pendingDataFn func() (core.PendingData, error),
+	pendingDataFn func() (*core.PreConfirmed, error),
 	cachedFilters *AggregatedBloomFilterCache,
 	runningFilter *core.RunningEventFilter,
 	layout core.TransactionLayout,
@@ -292,7 +292,7 @@ func (e *EventFilter) pendingEvents(
 ) ([]FilteredEvent, ContinuationToken, error) {
 	pendingData, err := e.pendingDataFn()
 	if err != nil {
-		if errors.Is(err, core.ErrPendingDataNotFound) {
+		if errors.Is(err, core.ErrPreConfirmedNotFound) {
 			return matchedEvents, ContinuationToken{}, nil
 		}
 		return nil, ContinuationToken{}, err
@@ -359,7 +359,7 @@ func (e *EventFilter) processPreLatestBlock(
 // processPreConfirmedBlock processes pre-confirmed block events
 func (e *EventFilter) processPreConfirmedBlock(
 	matchedEvents []FilteredEvent,
-	pendingData core.PendingData,
+	pendingData *core.PreConfirmed,
 	skippedEvents,
 	chunkSize uint64,
 ) ([]FilteredEvent, ContinuationToken, error) {

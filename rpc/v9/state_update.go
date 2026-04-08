@@ -67,7 +67,7 @@ type ReplacedClass struct {
 func (h *Handler) StateUpdate(id *BlockID) (StateUpdate, *jsonrpc.Error) {
 	update, err := h.stateUpdateByID(id)
 	if err != nil {
-		if errors.Is(err, db.ErrKeyNotFound) || errors.Is(err, core.ErrPendingDataNotFound) {
+		if errors.Is(err, db.ErrKeyNotFound) {
 			return StateUpdate{}, rpccore.ErrBlockNotFound
 		}
 		return StateUpdate{}, rpccore.ErrInternal.CloneWithData(err)
@@ -154,8 +154,7 @@ func (h *Handler) stateUpdateByID(id *BlockID) (*core.StateUpdate, error) {
 			return h.bcReader.StateUpdateByNumber(height)
 		}
 	case preConfirmed:
-		var pending core.PendingData
-		pending, err := h.PendingData()
+		pending, err := h.syncReader.PendingData()
 		if err != nil {
 			return nil, err
 		}

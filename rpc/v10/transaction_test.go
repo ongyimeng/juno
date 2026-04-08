@@ -56,8 +56,7 @@ func TestTransactionByHashNotFound(t *testing.T) {
 	txHash := felt.NewRandom[felt.Felt]()
 
 	mockReader.EXPECT().TransactionByHash(txHash).Return(nil, db.ErrKeyNotFound)
-	mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
-	mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
+	mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
 
 	handler := rpcv10.New(mockReader, mockSyncReader, nil, nil)
 
@@ -875,11 +874,11 @@ func TestTransactionReceiptByHash(t *testing.T) {
 		description   string
 		network       *utils.Network
 		expected      *rpcv10.TransactionReceipt
-		pendingDataFn func(t *testing.T, block *core.Block) core.PendingData
+		pendingDataFn func(t *testing.T, block *core.Block) *core.PreConfirmed
 		l1Head        core.L1Head
 	}
 
-	emptyPendingDataFunc := func(t *testing.T, block *core.Block) core.PendingData {
+	emptyPendingDataFunc := func(t *testing.T, block *core.Block) *core.PreConfirmed {
 		return &core.PreConfirmed{
 			Block: &core.Block{
 				Header: &core.Header{
@@ -889,7 +888,7 @@ func TestTransactionReceiptByHash(t *testing.T) {
 		}
 	}
 
-	preConfirmedPendingDataFunc := func(t *testing.T, block *core.Block) core.PendingData {
+	preConfirmedPendingDataFunc := func(t *testing.T, block *core.Block) *core.PreConfirmed {
 		return &core.PreConfirmed{
 			Block: &core.Block{
 				Header: &core.Header{
@@ -903,7 +902,7 @@ func TestTransactionReceiptByHash(t *testing.T) {
 		}
 	}
 
-	withPreLatestPendingDataFunc := func(t *testing.T, block *core.Block) core.PendingData {
+	withPreLatestPendingDataFunc := func(t *testing.T, block *core.Block) *core.PreConfirmed {
 		preLatest := core.PreLatest{
 			Block: &core.Block{
 				Header: &core.Header{
@@ -1073,8 +1072,7 @@ func TestTransactionReceiptByHash_NotFound(t *testing.T) {
 	mockReader.EXPECT().BlockNumberAndIndexByTxHash(
 		(*felt.TransactionHash)(txHash),
 	).Return(uint64(0), uint64(0), db.ErrKeyNotFound)
-	mockSyncReader.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound)
-	mockReader.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound)
+	mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
 
 	tx, rpcErr := handler.TransactionReceiptByHash(txHash)
 	assert.Nil(t, tx)

@@ -15,6 +15,7 @@ import (
 	"github.com/NethermindEth/juno/feed"
 	junoplugin "github.com/NethermindEth/juno/plugin"
 	"github.com/NethermindEth/juno/service"
+	"github.com/NethermindEth/juno/sync/pendingdata"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/sourcegraph/conc/stream"
 	"go.uber.org/zap"
@@ -45,7 +46,7 @@ type PendingTxSubscription struct {
 }
 
 type PendingDataSubscription struct {
-	*feed.Subscription[core.PendingData]
+	*feed.Subscription[*core.PreConfirmed]
 }
 
 type PreLatestDataSubscription struct {
@@ -74,9 +75,7 @@ type Reader interface {
 	SubscribeReorg() ReorgSubscription
 	SubscribePendingData() PendingDataSubscription
 	SubscribePreLatest() PreLatestDataSubscription
-
-	PendingData() (core.PendingData, error)
-	PendingBlock() *core.Block
+	PendingData() (*core.PreConfirmed, error)
 }
 
 // This is temporary and will be removed once the p2p synchronizer implements this interface.
@@ -99,23 +98,15 @@ func (n *NoopSynchronizer) SubscribeReorg() ReorgSubscription {
 }
 
 func (n *NoopSynchronizer) SubscribePendingData() PendingDataSubscription {
-	return PendingDataSubscription{feed.New[core.PendingData]().Subscribe()}
+	return PendingDataSubscription{feed.New[*core.PreConfirmed]().Subscribe()}
 }
 
 func (n *NoopSynchronizer) SubscribePreLatest() PreLatestDataSubscription {
 	return PreLatestDataSubscription{feed.New[*core.PreLatest]().Subscribe()}
 }
 
-func (n *NoopSynchronizer) PendingBlock() *core.Block {
-	return nil
-}
-
-func (n *NoopSynchronizer) PendingData() (core.PendingData, error) {
+func (n *NoopSynchronizer) PendingData() (*core.PreConfirmed, error) {
 	return nil, errors.New("PendingData() is not implemented")
-}
-
-func (n *NoopSynchronizer) PendingState() (core.StateReader, func() error, error) {
-	return nil, nil, errors.New("PendingState() not implemented")
 }
 
 // Synchronizer manages a list of StarknetData to fetch the latest blockchain updates
@@ -128,13 +119,13 @@ type Synchronizer struct {
 	highestBlockHeader  atomic.Pointer[core.Header]
 	newHeads            *feed.Feed[*core.Block]
 	reorgFeed           *feed.Feed[*ReorgBlockRange]
-	pendingDataFeed     *feed.Feed[core.PendingData]
+	pendingDataFeed     *feed.Feed[*core.PreConfirmed]
 	preLatestDataFeed   *feed.Feed[*core.PreLatest]
 
 	log      utils.StructuredLogger
 	listener EventListener
 
-	pendingData              atomic.Pointer[core.PendingData]
+	pendingData              atomic.Pointer[core.PreConfirmed]
 	preLatestPollInterval    time.Duration
 	preConfirmedPollInterval time.Duration
 
@@ -160,7 +151,7 @@ func New(
 		log:                      log,
 		newHeads:                 feed.New[*core.Block](),
 		reorgFeed:                feed.New[*ReorgBlockRange](),
-		pendingDataFeed:          feed.New[core.PendingData](),
+		pendingDataFeed:          feed.New[*core.PreConfirmed](),
 		preLatestDataFeed:        feed.New[*core.PreLatest](),
 		preLatestPollInterval:    preLatestPollInterval,
 		preConfirmedPollInterval: preConfirmedPollInterval,
@@ -604,12 +595,7 @@ func (s *Synchronizer) pollLatest(ctx context.Context) {
 	}
 }
 
-func (s *Synchronizer) PendingData() (core.PendingData, error) {
-	ptr := s.pendingData.Load()
-	if ptr == nil || *ptr == nil {
-		return nil, core.ErrPendingDataNotFound
-	}
-
+func (s *Synchronizer) PendingData() (*core.PreConfirmed, error) {
 	head, err := s.blockchain.HeadsHeader()
 	if err != nil {
 		if !errors.Is(err, db.ErrKeyNotFound) {
@@ -618,28 +604,23 @@ func (s *Synchronizer) PendingData() (core.PendingData, error) {
 		head = nil
 	}
 
-	p := *ptr
-	if p.Validate(head) {
-		// Special handling: if the pending data is PreConfirmed and contains a
-		// 'pre-latest' block attachment that is now outdated (head moved on),
-		// return a copy with the pre-latest attachment discarded.
-		if preConfirmed, ok := p.(*core.PreConfirmed); ok && head != nil {
-			shouldDiscardPreLatest := preConfirmed.Block.Number == head.Number+1 &&
-				preConfirmed.PreLatest != nil
-			if shouldDiscardPreLatest {
-				return preConfirmed.Copy().WithPreLatest(nil), nil
-			}
+	preConfirmed := s.pendingData.Load()
+	if preConfirmed != nil && preConfirmed.Validate(head) {
+		// Special handling: if the pending data contains a 'pre-latest' block attachment
+		// that is now outdated (head moved on), return a copy with the pre-latest attachment discarded.
+		if head != nil && preConfirmed.Block.Number == head.Number+1 && preConfirmed.PreLatest != nil {
+			return preConfirmed.Copy().WithPreLatest(nil), nil
 		}
-		return p, nil
+		return preConfirmed, nil
 	}
 
-	return nil, core.ErrPendingDataNotFound
-}
-
-func (s *Synchronizer) PendingBlock() *core.Block {
-	pendingData, err := s.PendingData()
+	// Fallback: no stored pending data, or stored data failed validation.
+	if head == nil {
+		return nil, db.ErrKeyNotFound
+	}
+	emptyPreConfirmed, err := pendingdata.MakeEmptyPreConfirmedForParent(s.blockchain, head)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return pendingData.GetBlock()
+	return &emptyPreConfirmed, nil
 }

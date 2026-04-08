@@ -50,7 +50,7 @@ func (fc *fakeConn) Equal(other jsonrpc.Conn) bool {
 type fakeSyncer struct {
 	newHeads    *feed.Feed[*core.Block]
 	reorgs      *feed.Feed[*sync.ReorgBlockRange]
-	pendingData *feed.Feed[core.PendingData]
+	pendingData *feed.Feed[*core.PreConfirmed]
 	preLatest   *feed.Feed[*core.PreLatest]
 }
 
@@ -58,7 +58,7 @@ func newFakeSyncer() *fakeSyncer {
 	return &fakeSyncer{
 		newHeads:    feed.New[*core.Block](),
 		reorgs:      feed.New[*sync.ReorgBlockRange](),
-		pendingData: feed.New[core.PendingData](),
+		pendingData: feed.New[*core.PreConfirmed](),
 		preLatest:   feed.New[*core.PreLatest](),
 	}
 }
@@ -87,18 +87,8 @@ func (fs *fakeSyncer) HighestBlockHeader() *core.Header {
 	return nil
 }
 
-func (fs *fakeSyncer) PendingData() (core.PendingData, error) {
-	return nil, core.ErrPendingDataNotFound
-}
-func (fs *fakeSyncer) PendingBlock() *core.Block { return nil }
-func (fs *fakeSyncer) PendingState() (core.StateReader, func() error, error) {
-	return nil, nil, nil
-}
-
-func (fs *fakeSyncer) PendingStateBeforeIndex(
-	index uint64,
-) (core.StateReader, func() error, error) {
-	return nil, nil, nil
+func (fs *fakeSyncer) PendingData() (*core.PreConfirmed, error) {
+	return nil, db.ErrKeyNotFound
 }
 
 // setupMockWithSingleEvent sets up mocks for a single event list
@@ -842,9 +832,8 @@ func TestSubscribeTxnStatus(t *testing.T) {
 		mockChain.EXPECT().BlockNumberAndIndexByTxHash(
 			(*felt.TransactionHash)(txHash),
 		).Return(uint64(0), uint64(0), db.ErrKeyNotFound).AnyTimes()
-		mockSyncer.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound).AnyTimes()
+		mockSyncer.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound).AnyTimes()
 		mockChain.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound).AnyTimes()
-		mockSyncer.EXPECT().PendingBlock().Return(nil).AnyTimes()
 		id, _ := createTestTxStatusWebsocket(t, handler, txHash)
 
 		_, hasSubscription := handler.subscriptions.Load(string(id))
@@ -863,7 +852,7 @@ func TestSubscribeTxnStatus(t *testing.T) {
 		mockSyncer := mocks.NewMockSyncReader(mockCtrl)
 		handler := New(mockChain, mockSyncer, nil, log)
 		handler.WithFeeder(feeder.NewTestClient(t, &utils.SepoliaIntegration))
-		mockSyncer.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound).AnyTimes()
+		mockSyncer.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound).AnyTimes()
 		mockChain.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound).AnyTimes()
 		t.Run("reverted", func(t *testing.T) {
 			txHash, err := felt.NewFromString[felt.Felt]("0x1011")
@@ -930,8 +919,7 @@ func TestSubscribeTxnStatus(t *testing.T) {
 		mockChain.EXPECT().BlockNumberAndIndexByTxHash((*felt.TransactionHash)(txHash)).Return(
 			uint64(0), uint64(0), db.ErrKeyNotFound,
 		)
-		mockSyncer.EXPECT().PendingData().Return(nil, core.ErrPendingDataNotFound).Times(2)
-		mockChain.EXPECT().HeadsHeader().Return(nil, db.ErrKeyNotFound).Times(2)
+		mockSyncer.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound).Times(2)
 
 		id, conn := createTestTxStatusWebsocket(t, handler, txHash)
 

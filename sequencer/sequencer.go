@@ -3,6 +3,7 @@ package sequencer
 import (
 	"context"
 	"errors"
+	"fmt"
 	syncLock "sync"
 	"time"
 
@@ -36,7 +37,7 @@ type Sequencer struct {
 	mempool          *mempool.SequencerMempool
 
 	subNewHeads    *feed.Feed[*core.Block]
-	subPendingData *feed.Feed[core.PendingData]
+	subPendingData *feed.Feed[*core.PreConfirmed]
 	subReorgFeed   *feed.Feed[*sync.ReorgBlockRange]
 	subPreLatest   *feed.Feed[*core.PreLatest]
 	plugin         plugin.JunoPlugin
@@ -61,7 +62,7 @@ func New(
 		log:              log,
 		blockTime:        blockTime,
 		subNewHeads:      feed.New[*core.Block](),
-		subPendingData:   feed.New[core.PendingData](),
+		subPendingData:   feed.New[*core.PreConfirmed](),
 		subReorgFeed:     feed.New[*sync.ReorgBlockRange](),
 		subPreLatest:     feed.New[*core.PreLatest](),
 	}
@@ -240,6 +241,9 @@ func (s *Sequencer) SubscribePreLatest() sync.PreLatestDataSubscription {
 	return sync.PreLatestDataSubscription{Subscription: s.subPreLatest.Subscribe()}
 }
 
-func (s *Sequencer) PendingData() (core.PendingData, error) {
-	return nil, nil
+// Returning an error, because when the sequencer is used as the sync.Reader,
+// if the PendingData() doesn't return an error, the caller will face the
+// nil pointer dereference error
+func (s *Sequencer) PendingData() (*core.PreConfirmed, error) {
+	return nil, fmt.Errorf("PendingData(): not implemented")
 }

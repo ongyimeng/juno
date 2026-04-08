@@ -8,6 +8,7 @@ import (
 	"github.com/NethermindEth/juno/clients/feeder"
 	"github.com/NethermindEth/juno/core"
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/db/memory"
 	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/NethermindEth/juno/mocks"
@@ -236,7 +237,7 @@ func TestEvents(t *testing.T) {
 	type eventTest struct {
 		description    string
 		args           rpc.EventArgs
-		pendingData    core.PendingData
+		pendingData    *core.PreConfirmed
 		expectedEvents []rpc.EmittedEvent
 		expectError    *jsonrpc.Error
 	}
@@ -560,7 +561,11 @@ func TestEvents_FilterWithLimit(t *testing.T) {
 	n := &utils.Sepolia
 	chain, _ := setupTestChain(t, n, uint64(6))
 
-	handler := rpc.New(chain, nil, nil, utils.NewNopZapLogger())
+	mockCtrl := gomock.NewController(t)
+	t.Cleanup(mockCtrl.Finish)
+	mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
+	mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound).AnyTimes()
+	handler := rpc.New(chain, mockSyncReader, nil, utils.NewNopZapLogger())
 
 	from := felt.NewUnsafeFromString[felt.Address](
 		"0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",

@@ -116,7 +116,6 @@ func TestNonce(t *testing.T) {
 		mockSyncReader.EXPECT().PendingData().Return(&preConfirmed, nil)
 		mockReader.EXPECT().StateAtBlockNumber(preConfirmed.Block.Number-1).
 			Return(mockState, nopCloser, nil)
-
 		preConfirmedBlockID := blockIDPreConfirmed(t)
 		nonce, rpcErr := handler.Nonce(&preConfirmedBlockID, &targetAddress)
 		require.Nil(t, rpcErr)

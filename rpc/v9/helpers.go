@@ -12,6 +12,7 @@ import (
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/NethermindEth/juno/rpc/rpccore"
+	"github.com/NethermindEth/juno/sync/pendingdata"
 	"go.uber.org/zap"
 )
 
@@ -37,8 +38,8 @@ func (h *Handler) blockByID(blockID *BlockID) (*core.Block, *jsonrpc.Error) {
 
 	switch blockID.Type() {
 	case preConfirmed:
-		var pending core.PendingData
-		pending, err = h.PendingData()
+		var pending *core.PreConfirmed
+		pending, err = h.syncReader.PendingData()
 		if err == nil {
 			block = pending.GetBlock()
 		}
@@ -72,7 +73,7 @@ func (h *Handler) blockByID(blockID *BlockID) (*core.Block, *jsonrpc.Error) {
 func (h *Handler) blockTxnsByNumber(blockID *BlockID) ([]core.Transaction, *jsonrpc.Error) {
 	switch blockID.Type() {
 	case preConfirmed:
-		pending, err := h.PendingData()
+		pending, err := h.syncReader.PendingData()
 		if err != nil {
 			if errors.Is(err, db.ErrKeyNotFound) {
 				return nil, rpccore.ErrBlockNotFound
@@ -98,8 +99,8 @@ func (h *Handler) blockHeaderByID(blockID *BlockID) (*core.Header, *jsonrpc.Erro
 	var err error
 	switch blockID.Type() {
 	case preConfirmed:
-		var pending core.PendingData
-		pending, err = h.PendingData()
+		var pending *core.PreConfirmed
+		pending, err = h.syncReader.PendingData()
 		if err == nil {
 			header = pending.GetBlock().Header
 		}
@@ -183,7 +184,11 @@ func (h *Handler) stateByBlockID(
 	var err error
 	switch blockID.Type() {
 	case preConfirmed:
-		reader, closer, err = h.PendingState()
+		var pendingData *core.PreConfirmed
+		pendingData, err = h.syncReader.PendingData()
+		if err == nil {
+			reader, closer, err = pendingdata.PendingState(pendingData, h.bcReader)
+		}
 	case latest:
 		reader, closer, err = h.bcReader.HeadState()
 	case hash:
