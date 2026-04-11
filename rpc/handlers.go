@@ -144,15 +144,15 @@ func (h *Handler) MethodsV0_10() ([]jsonrpc.Method, string) {
 	return []jsonrpc.Method{
 		{
 			Name:    "starknet_chainId",
-			Handler: h.rpcv6Handler.ChainID,
+			Handler: h.rpcv10Handler.ChainID,
 		},
 		{
 			Name:    "starknet_blockNumber",
-			Handler: h.rpcv6Handler.BlockNumber,
+			Handler: h.rpcv10Handler.BlockNumber,
 		},
 		{
 			Name:    "starknet_blockHashAndNumber",
-			Handler: h.rpcv6Handler.BlockHashAndNumber,
+			Handler: h.rpcv10Handler.BlockHashAndNumber,
 		},
 		{
 			Name:    "starknet_getBlockWithTxHashes",
@@ -183,7 +183,7 @@ func (h *Handler) MethodsV0_10() ([]jsonrpc.Method, string) {
 		{
 			Name:    "starknet_getBlockTransactionCount",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}},
-			Handler: h.rpcv9Handler.BlockTransactionCount,
+			Handler: h.rpcv10Handler.BlockTransactionCount,
 		},
 		{
 			Name: "starknet_getTransactionByBlockIdAndIndex",
@@ -204,12 +204,12 @@ func (h *Handler) MethodsV0_10() ([]jsonrpc.Method, string) {
 		},
 		{
 			Name:    "starknet_syncing",
-			Handler: h.rpcv6Handler.Syncing,
+			Handler: h.rpcv10Handler.Syncing,
 		},
 		{
 			Name:    "starknet_getNonce",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "contract_address"}},
-			Handler: h.rpcv9Handler.Nonce,
+			Handler: h.rpcv10Handler.Nonce,
 		},
 		{
 			Name: "starknet_getStorageAt",
@@ -224,17 +224,17 @@ func (h *Handler) MethodsV0_10() ([]jsonrpc.Method, string) {
 		{
 			Name:    "starknet_getClassHashAt",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "contract_address"}},
-			Handler: h.rpcv9Handler.ClassHashAt,
+			Handler: h.rpcv10Handler.ClassHashAt,
 		},
 		{
 			Name:    "starknet_getClass",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "class_hash"}},
-			Handler: h.rpcv9Handler.Class,
+			Handler: h.rpcv10Handler.Class,
 		},
 		{
 			Name:    "starknet_getClassAt",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "contract_address"}},
-			Handler: h.rpcv9Handler.ClassAt,
+			Handler: h.rpcv10Handler.ClassAt,
 		},
 		{
 			Name:    "starknet_addInvokeTransaction",
@@ -359,12 +359,12 @@ func (h *Handler) MethodsV0_10() ([]jsonrpc.Method, string) {
 		{
 			Name:    "starknet_getCompiledCasm",
 			Params:  []jsonrpc.Parameter{{Name: "class_hash"}},
-			Handler: h.rpcv9Handler.CompiledCasm,
+			Handler: h.rpcv10Handler.CompiledCasm,
 		},
 		{
 			Name:    "starknet_getMessagesStatus",
 			Params:  []jsonrpc.Parameter{{Name: "transaction_hash"}},
-			Handler: h.rpcv9Handler.GetMessageStatus,
+			Handler: h.rpcv10Handler.GetMessageStatus,
 		},
 		{
 			Name: "starknet_getStorageProof",
@@ -374,7 +374,7 @@ func (h *Handler) MethodsV0_10() ([]jsonrpc.Method, string) {
 				{Name: "contract_addresses", Optional: true},
 				{Name: "contracts_storage_keys", Optional: true},
 			},
-			Handler: h.rpcv9Handler.StorageProof,
+			Handler: h.rpcv10Handler.StorageProof,
 		},
 	}, "/v0_10"
 }
