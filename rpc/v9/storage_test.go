@@ -188,7 +188,7 @@ func TestStorageAt(t *testing.T) {
 				StateDiff: &preConfirmedStateDiff,
 			},
 		}
-		mockSyncReader.EXPECT().PendingData().Return(&preConfirmed, nil)
+		mockSyncReader.EXPECT().PreConfirmed().Return(&preConfirmed, nil)
 		mockReader.EXPECT().StateAtBlockNumber(preConfirmed.Block.Number-1).
 			Return(mockState, nopCloser, nil)
 		preConfirmedID := blockIDPreConfirmed(t)

@@ -325,7 +325,7 @@ func (h *Handler) TransactionStatus(
 		// Search pre-confirmed block for 'CANDIDATE' status
 		var txStatus *starknet.TransactionStatus
 		var err error
-		preConfirmedB, err := h.syncReader.PendingData()
+		preConfirmedB, err := h.syncReader.PreConfirmed()
 
 		if err == nil {
 			for _, txn := range preConfirmedB.GetCandidateTransaction() {
@@ -377,9 +377,9 @@ func (h *Handler) TransactionByHash(
 	hash *felt.Felt,
 	responseFlags ResponseFlags,
 ) (*Transaction, *jsonrpc.Error) {
-	// Check pending data
-	if pending, err := h.syncReader.PendingData(); err == nil {
-		if txn, err := pending.TransactionByHash(hash); err == nil {
+	// Check pre-confirmed data
+	if preConfirmed, err := h.syncReader.PreConfirmed(); err == nil {
+		if txn, err := preConfirmed.TransactionByHash(hash); err == nil {
 			adaptedTxn := AdaptTransaction(txn, responseFlags.IncludeProofFacts)
 			return &adaptedTxn, nil
 		}
@@ -416,16 +416,16 @@ func (h *Handler) TransactionByBlockIDAndIndex(
 	var err error
 	switch {
 	case blockID.IsPreConfirmed():
-		pending, err := h.syncReader.PendingData()
+		preConfirmed, err := h.syncReader.PreConfirmed()
 		if err != nil {
 			return nil, rpccore.ErrBlockNotFound
 		}
 
-		if uint64(txIndex) >= pending.GetBlock().TransactionCount {
+		if uint64(txIndex) >= preConfirmed.GetBlock().TransactionCount {
 			return nil, rpccore.ErrInvalidTxIndex
 		}
 
-		adaptedTxn := AdaptTransaction(pending.GetBlock().Transactions[txIndex], includeProofFacts)
+		adaptedTxn := AdaptTransaction(preConfirmed.GetBlock().Transactions[txIndex], includeProofFacts)
 		return &adaptedTxn, nil
 	case blockID.IsLatest():
 		header, err := h.bcReader.HeadsHeader()
@@ -515,22 +515,22 @@ func (h *Handler) TransactionReceiptByHash(
 	), nil
 }
 
-// getPendingTransactionReceipt searches for a transaction receipt in the pending data.
+// getPendingTransactionReceipt searches for a transaction receipt in the pre_confirmed block.
 // Returns the receipt if found, otherwise returns `rpccore.ErrTxnHashNotFound`.
 func (h *Handler) getPendingTransactionReceipt(
 	hash *felt.Felt,
 ) (*TransactionReceipt, *jsonrpc.Error) {
-	pending, err := h.syncReader.PendingData()
+	preConfirmed, err := h.syncReader.PreConfirmed()
 	if err != nil {
 		return nil, rpccore.ErrTxnHashNotFound
 	}
 
-	receipt, _, blockNumber, err := pending.ReceiptByHash(hash)
+	receipt, _, blockNumber, err := preConfirmed.ReceiptByHash(hash)
 	if err != nil {
 		return nil, rpccore.ErrTxnHashNotFound
 	}
 
-	txn, err := pending.TransactionByHash(hash)
+	txn, err := preConfirmed.TransactionByHash(hash)
 	if err != nil {
 		return nil, rpccore.ErrTxnHashNotFound
 	}

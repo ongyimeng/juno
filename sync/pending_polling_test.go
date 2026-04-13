@@ -323,7 +323,7 @@ func TestPollPreConfirmedLoop(t *testing.T) {
 	})
 }
 
-func TestRunPreConfirmedPhase(t *testing.T) {
+func TestPollPendingData(t *testing.T) {
 	testDB := memory.New()
 	bc := blockchain.New(testDB, &utils.Sepolia)
 	client := feeder.NewTestClient(t, &utils.Sepolia)
@@ -358,20 +358,16 @@ func TestRunPreConfirmedPhase(t *testing.T) {
 	s := New(bc, mockDataSource, log, 50*time.Millisecond, 50*time.Millisecond, false, testDB)
 	s.highestBlockHeader.Store(block0.Header)
 
-	// Subscribe to pending data feed to observe stored pre_confirmed
-	sub := s.pendingDataFeed.SubscribeKeepLast()
+	// Subscribe to pre-confirmed feed to observe stored pre_confirmed
+	sub := s.preConfirmedDataFeed.SubscribeKeepLast()
 	defer sub.Unsubscribe()
-
-	// Create a heads subscription used by runPreConfirmedPhase
-	headsSub := s.newHeads.SubscribeKeepLast()
-	defer headsSub.Unsubscribe()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
 	var wg stdsync.WaitGroup
 	wg.Go(func() {
-		s.runPreConfirmedPhase(ctx, headsSub)
+		s.pollPendingData(ctx)
 	})
 	defer wg.Wait()
 
@@ -440,7 +436,7 @@ func TestPollPendingDataPreConfirmedPolling(t *testing.T) {
 
 	s.highestBlockHeader.Store(block0.Header)
 
-	sub := s.pendingDataFeed.SubscribeKeepLast()
+	sub := s.preConfirmedDataFeed.SubscribeKeepLast()
 	defer sub.Unsubscribe()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
@@ -488,7 +484,7 @@ func TestStorePreConfirmed(t *testing.T) {
 			written, err := s.StorePreConfirmed(&preConfirmed)
 			require.NoError(t, err)
 			require.True(t, written)
-			ptr := s.pendingData.Load()
+			ptr := s.preConfirmed.Load()
 			require.NotNil(t, ptr)
 			require.Equal(t, preConfirmed, *ptr)
 		})
@@ -503,7 +499,7 @@ func TestStorePreConfirmed(t *testing.T) {
 			map[felt.Felt]core.ClassDefinition{},
 		))
 		t.Run("not valid for head", func(t *testing.T) {
-			s.pendingData.Store(nil)
+			s.preConfirmed.Store(nil)
 			written, err := s.StorePreConfirmed(&preConfirmed)
 			require.Error(t, err)
 			require.False(t, written)
@@ -533,7 +529,7 @@ func TestStorePreConfirmed(t *testing.T) {
 			StateUpdate: &core.StateUpdate{},
 		}
 		// Insert invalid pending (simulate old data)
-		s.pendingData.Store(&invalidPreConfirmed)
+		s.preConfirmed.Store(&invalidPreConfirmed)
 		pc := &core.PreConfirmed{
 			Block:       &core.Block{Header: &core.Header{Number: head.Number + 1}},
 			StateUpdate: &core.StateUpdate{},
@@ -579,7 +575,7 @@ func TestStorePreConfirmed(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, written)
 
-		ptr := s.pendingData.Load()
+		ptr := s.preConfirmed.Load()
 		require.NotNil(t, ptr)
 		stored := *ptr
 		require.NotNil(t, stored.PreLatest, "attachment should be updated even if not swapping blocks")
@@ -587,7 +583,7 @@ func TestStorePreConfirmed(t *testing.T) {
 	})
 
 	t.Run("accepts pre_confirmed with more txs for same block number", func(t *testing.T) {
-		s.pendingData.Store(nil)
+		s.preConfirmed.Store(nil)
 		head, err := bc.HeadsHeader()
 		require.NoError(t, err)
 
@@ -603,7 +599,7 @@ func TestStorePreConfirmed(t *testing.T) {
 		written, err := s.StorePreConfirmed(&worse)
 		require.NoError(t, err)
 		require.True(t, written)
-		ptr := s.pendingData.Load()
+		ptr := s.preConfirmed.Load()
 		require.Equal(t, worse, *ptr)
 
 		better := core.PreConfirmed{
@@ -618,12 +614,12 @@ func TestStorePreConfirmed(t *testing.T) {
 		written, err = s.StorePreConfirmed(&better)
 		require.NoError(t, err)
 		require.True(t, written)
-		ptr = s.pendingData.Load()
+		ptr = s.preConfirmed.Load()
 		require.Equal(t, better, *ptr)
 	})
 
 	t.Run("accepts more recent pre_confirmed regardless tx count", func(t *testing.T) {
-		s.pendingData.Store(nil)
+		s.preConfirmed.Store(nil)
 		head, err := bc.HeadsHeader()
 		require.NoError(t, err)
 
@@ -639,7 +635,7 @@ func TestStorePreConfirmed(t *testing.T) {
 		written, err := s.StorePreConfirmed(&old)
 		require.NoError(t, err)
 		require.True(t, written)
-		ptr := s.pendingData.Load()
+		ptr := s.preConfirmed.Load()
 		require.Equal(t, old, *ptr)
 
 		// Attach prelatest to make validate pass for pre_confirmed number == head + 2.
@@ -665,7 +661,7 @@ func TestStorePreConfirmed(t *testing.T) {
 		written, err = s.StorePreConfirmed(&newer)
 		require.NoError(t, err)
 		require.True(t, written)
-		ptr = s.pendingData.Load()
+		ptr = s.preConfirmed.Load()
 		require.Equal(t, newer, *ptr)
 	})
 
@@ -674,7 +670,7 @@ func TestStorePreConfirmed(t *testing.T) {
 		// - pre_confirmed at N + 1
 		// - pre_confirmed is at N + 2 (with pre-latest).
 		// However N+1 must not overwrite N+2.
-		s.pendingData.Store(nil)
+		s.preConfirmed.Store(nil)
 		head, err := bc.HeadsHeader()
 		require.NoError(t, err)
 		// Attach prelatest to make validate pass for pre_confirmed number == head + 2.
@@ -700,7 +696,7 @@ func TestStorePreConfirmed(t *testing.T) {
 		written, err := s.StorePreConfirmed(&newer)
 		require.NoError(t, err)
 		require.True(t, written)
-		ptr := s.pendingData.Load()
+		ptr := s.preConfirmed.Load()
 		require.Equal(t, newer, *ptr)
 		// Valid older pre_confirmed
 		old := core.PreConfirmed{
@@ -715,7 +711,7 @@ func TestStorePreConfirmed(t *testing.T) {
 		written, err = s.StorePreConfirmed(&old)
 		require.NoError(t, err)
 		require.False(t, written)
-		ptr = s.pendingData.Load()
+		ptr = s.preConfirmed.Load()
 		require.Equal(t, newer, *ptr)
 	})
 }

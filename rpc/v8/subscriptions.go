@@ -191,7 +191,7 @@ func (h *Handler) SubscribeEvents(
 	}
 
 	nextBlock := headHeader.Number + 1
-	// v8 does not subscribe to pending/pre-confirmed data, so events are only emitted on
+	// v8 does not subscribe to pre-confirmed, so events are only emitted on
 	// confirmed heads. No deduplication between pending and confirmed events is needed.
 	subscriber := subscriber{
 		onStart: func(ctx context.Context, id string, _ *subscription, _ any) error {

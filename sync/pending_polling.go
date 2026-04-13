@@ -9,8 +9,6 @@ import (
 	"github.com/NethermindEth/juno/core"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/db"
-	"github.com/NethermindEth/juno/feed"
-	"github.com/NethermindEth/juno/sync/pendingdata"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"go.uber.org/zap"
 )
@@ -28,9 +26,9 @@ func (s *Synchronizer) isGreaterThanTip(blockNumber uint64) bool {
 	return highest.Number < blockNumber
 }
 
-// Returns true if existing pendingData is valid for head and incoming is not richer than existing.
+// Returns true if existing preConfirmed is valid for head and incoming is not richer than existing.
 // Otherwise returns false.
-func shouldPreservePendingData(
+func shouldPreservePreConfirmed(
 	existingPending *core.PreConfirmed,
 	incomingPending *core.PreConfirmed,
 	head *core.Header,
@@ -55,7 +53,7 @@ func shouldPreservePendingData(
 // Returns true if the store was updated, false if no matching pre_confirmed is stored
 // or the attachment was already equal.
 func (s *Synchronizer) UpdatePreLatestAttachment(blockNumber uint64, preLatest *core.PreLatest) bool {
-	pc := s.pendingData.Load()
+	pc := s.preConfirmed.Load()
 
 	if pc == nil || pc.Block == nil || pc.Block.Number != blockNumber {
 		// nil or different height stored; do not touch.
@@ -71,7 +69,7 @@ func (s *Synchronizer) UpdatePreLatestAttachment(blockNumber uint64, preLatest *
 	next := pc.Copy()
 	next.WithPreLatest(preLatest)
 
-	return s.pendingData.CompareAndSwap(pc, next)
+	return s.preConfirmed.CompareAndSwap(pc, next)
 }
 
 // StorePreConfirmed stores a pre_confirmed block given that it is for the next height.
@@ -94,14 +92,14 @@ func (s *Synchronizer) StorePreConfirmed(p *core.PreConfirmed) (bool, error) {
 		return false, errors.New("store pre_confirmed not valid for parent")
 	}
 
-	existingPtr := s.pendingData.Load()
+	existingPtr := s.preConfirmed.Load()
 
-	if existingPtr != nil && shouldPreservePendingData(existingPtr, p, head) {
+	if existingPtr != nil && shouldPreservePreConfirmed(existingPtr, p, head) {
 		_ = s.UpdatePreLatestAttachment(p.GetBlock().Number, p.PreLatest)
 		return false, nil
 	}
 
-	return s.pendingData.CompareAndSwap(existingPtr, p), nil
+	return s.preConfirmed.CompareAndSwap(existingPtr, p), nil
 }
 
 // storeEmptyPreConfirmed creates a baseline pre_confirmed for head+1 and stores it.
@@ -110,7 +108,7 @@ func (s *Synchronizer) storeEmptyPreConfirmed(
 	latestHeader *core.Header,
 	preLatest *core.PreLatest,
 ) error {
-	preConfirmed, err := pendingdata.MakeEmptyPreConfirmedForParent(s.blockchain, latestHeader)
+	preConfirmed, err := MakeEmptyPreConfirmedForParent(s.blockchain, latestHeader)
 	if err != nil {
 		return err
 	}
@@ -331,12 +329,20 @@ func (s *Synchronizer) handlePreConfirmed(
 	}
 
 	if changed {
-		s.pendingDataFeed.Send(pc)
+		s.preConfirmedDataFeed.Send(pc)
 	}
 }
 
-// runPreConfirmedPhase coordinates baselines and final storage.
-func (s *Synchronizer) runPreConfirmedPhase(ctx context.Context, headsSub *feed.Subscription[*core.Block]) {
+// pollPendingData coordinates pre_latest and pre_confirmed polling.
+func (s *Synchronizer) pollPendingData(ctx context.Context) {
+	if s.preLatestPollInterval == 0 || s.preConfirmedPollInterval == 0 {
+		s.log.Info("Pending data polling is disabled")
+		return
+	}
+
+	headsSub := s.newHeads.SubscribeKeepLast()
+	defer headsSub.Unsubscribe()
+
 	preLatestCh := make(chan *core.PreLatest, 1)
 	preConfirmedCh := make(chan *core.PreConfirmed, 1)
 	var preConfirmedBlockNumberToPoll atomic.Uint64
@@ -371,17 +377,4 @@ func (s *Synchronizer) runPreConfirmedPhase(ctx context.Context, headsSub *feed.
 			s.handlePreConfirmed(pc, stagedPreLatest)
 		}
 	}
-}
-
-// pollPendingData coordinates pre_latest and pre_confirmed polling.
-func (s *Synchronizer) pollPendingData(ctx context.Context) {
-	if s.preLatestPollInterval == 0 || s.preConfirmedPollInterval == 0 {
-		s.log.Info("Pending data polling is disabled")
-		return
-	}
-
-	headsSub := s.newHeads.SubscribeKeepLast()
-	defer headsSub.Unsubscribe()
-
-	s.runPreConfirmedPhase(ctx, headsSub)
 }

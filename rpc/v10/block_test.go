@@ -412,7 +412,7 @@ func setupMockBlockTest(
 			block,
 			int(block.TransactionCount),
 		)
-		mockSyncReader.EXPECT().PendingData().Return(
+		mockSyncReader.EXPECT().PreConfirmed().Return(
 			&blockAsPreConfirmed,
 			nil,
 		).AnyTimes()
@@ -629,7 +629,7 @@ func TestBlockWithTxHashes_ErrorCases(t *testing.T) {
 			handler := rpc.New(chain, mockSyncReader, nil, log)
 
 			if description == "pre_confirmed" {
-				mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
+				mockSyncReader.EXPECT().PreConfirmed().Return(nil, db.ErrKeyNotFound)
 			}
 
 			block, rpcErr := handler.BlockWithTxHashes(&id)
@@ -759,7 +759,7 @@ func TestBlockWithTxs_ErrorCases(t *testing.T) {
 			handler := rpc.New(chain, mockSyncReader, nil, log)
 
 			if description == "pre_confirmed" {
-				mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
+				mockSyncReader.EXPECT().PreConfirmed().Return(nil, db.ErrKeyNotFound)
 			}
 
 			block, rpcErr := handler.BlockWithTxs(&id, rpc.ResponseFlags{})
@@ -905,7 +905,7 @@ func TestBlockWithReceipts_ErrorCases(t *testing.T) {
 			handler := rpc.New(chain, mockSyncReader, nil, log)
 
 			if description == "pre_confirmed" {
-				mockSyncReader.EXPECT().PendingData().Return(nil, db.ErrKeyNotFound)
+				mockSyncReader.EXPECT().PreConfirmed().Return(nil, db.ErrKeyNotFound)
 			}
 
 			block, rpcErr := handler.BlockWithReceipts(&id, rpc.ResponseFlags{})

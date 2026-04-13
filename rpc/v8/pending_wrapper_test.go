@@ -9,13 +9,13 @@ import (
 	"github.com/NethermindEth/juno/mocks"
 	rpc "github.com/NethermindEth/juno/rpc/v8"
 	adaptfeeder "github.com/NethermindEth/juno/starknetdata/feeder"
-	"github.com/NethermindEth/juno/sync/pendingdata"
+	"github.com/NethermindEth/juno/sync"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
-func TestPendingDataWrapper_PendingData(t *testing.T) {
+func TestPendingWrapper_Pending(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 	mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
@@ -33,35 +33,17 @@ func TestPendingDataWrapper_PendingData(t *testing.T) {
 	t.Run("Returns empty pending placeholder based on latest header", func(t *testing.T) {
 		mockReader.EXPECT().HeadsHeader().Return(latestBlock.Header, nil)
 		mockReader.EXPECT().BlockHeaderByNumber(
-			latestBlock.Header.Number+1-pendingdata.BlockHashLag,
+			latestBlock.Header.Number+1-sync.BlockHashLag,
 		).Return(&core.Header{Hash: felt.NewFromUint64[felt.Felt](1234567)}, nil).Times(2)
 
-		expectedPending, err := pendingdata.MakeEmptyPendingForParent(
+		expectedPending, err := sync.MakeEmptyPendingForParent(
 			mockReader,
 			latestBlock.Header,
 		)
 		require.NoError(t, err)
 
-		pending, err := handler.PendingData()
+		pending, err := handler.Pending()
 		require.NoError(t, err)
 		require.Equal(t, &expectedPending, pending)
-	})
-}
-
-func TestPendingDataWrapper_PendingState(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	t.Cleanup(mockCtrl.Finish)
-	mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
-	mockReader := mocks.NewMockReader(mockCtrl)
-	handler := rpc.New(mockReader, mockSyncReader, nil, nil)
-
-	mockState := mocks.NewMockStateReader(mockCtrl)
-	t.Run("Returns head state", func(t *testing.T) {
-		mockReader.EXPECT().HeadState().Return(mockState, nopCloser, nil)
-		pending, closer, err := handler.PendingState()
-
-		require.NoError(t, err)
-		require.NotNil(t, pending)
-		require.NotNil(t, closer)
 	})
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/NethermindEth/juno/feed"
 	junoplugin "github.com/NethermindEth/juno/plugin"
 	"github.com/NethermindEth/juno/service"
-	"github.com/NethermindEth/juno/sync/pendingdata"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/sourcegraph/conc/stream"
 	"go.uber.org/zap"
@@ -45,7 +44,7 @@ type PendingTxSubscription struct {
 	*feed.Subscription[[]core.Transaction]
 }
 
-type PendingDataSubscription struct {
+type PreConfirmedDataSubscription struct {
 	*feed.Subscription[*core.PreConfirmed]
 }
 
@@ -73,9 +72,9 @@ type Reader interface {
 	HighestBlockHeader() *core.Header
 	SubscribeNewHeads() NewHeadSubscription
 	SubscribeReorg() ReorgSubscription
-	SubscribePendingData() PendingDataSubscription
+	SubscribePreConfirmed() PreConfirmedDataSubscription
 	SubscribePreLatest() PreLatestDataSubscription
-	PendingData() (*core.PreConfirmed, error)
+	PreConfirmed() (*core.PreConfirmed, error)
 }
 
 // This is temporary and will be removed once the p2p synchronizer implements this interface.
@@ -97,35 +96,35 @@ func (n *NoopSynchronizer) SubscribeReorg() ReorgSubscription {
 	return ReorgSubscription{feed.New[*ReorgBlockRange]().Subscribe()}
 }
 
-func (n *NoopSynchronizer) SubscribePendingData() PendingDataSubscription {
-	return PendingDataSubscription{feed.New[*core.PreConfirmed]().Subscribe()}
+func (n *NoopSynchronizer) SubscribePreConfirmed() PreConfirmedDataSubscription {
+	return PreConfirmedDataSubscription{feed.New[*core.PreConfirmed]().Subscribe()}
 }
 
 func (n *NoopSynchronizer) SubscribePreLatest() PreLatestDataSubscription {
 	return PreLatestDataSubscription{feed.New[*core.PreLatest]().Subscribe()}
 }
 
-func (n *NoopSynchronizer) PendingData() (*core.PreConfirmed, error) {
-	return nil, errors.New("PendingData() is not implemented")
+func (n *NoopSynchronizer) PreConfirmed() (*core.PreConfirmed, error) {
+	return nil, errors.New("PreConfirmed() is not implemented")
 }
 
 // Synchronizer manages a list of StarknetData to fetch the latest blockchain updates
 type Synchronizer struct {
-	blockchain          *blockchain.Blockchain
-	db                  db.KeyValueStore
-	readOnlyBlockchain  bool
-	dataSource          DataSource
-	startingBlockNumber *uint64
-	highestBlockHeader  atomic.Pointer[core.Header]
-	newHeads            *feed.Feed[*core.Block]
-	reorgFeed           *feed.Feed[*ReorgBlockRange]
-	pendingDataFeed     *feed.Feed[*core.PreConfirmed]
-	preLatestDataFeed   *feed.Feed[*core.PreLatest]
+	blockchain           *blockchain.Blockchain
+	db                   db.KeyValueStore
+	readOnlyBlockchain   bool
+	dataSource           DataSource
+	startingBlockNumber  *uint64
+	highestBlockHeader   atomic.Pointer[core.Header]
+	newHeads             *feed.Feed[*core.Block]
+	reorgFeed            *feed.Feed[*ReorgBlockRange]
+	preConfirmedDataFeed *feed.Feed[*core.PreConfirmed]
+	preLatestDataFeed    *feed.Feed[*core.PreLatest]
 
 	log      utils.StructuredLogger
 	listener EventListener
 
-	pendingData              atomic.Pointer[core.PreConfirmed]
+	preConfirmed             atomic.Pointer[core.PreConfirmed]
 	preLatestPollInterval    time.Duration
 	preConfirmedPollInterval time.Duration
 
@@ -151,7 +150,7 @@ func New(
 		log:                      log,
 		newHeads:                 feed.New[*core.Block](),
 		reorgFeed:                feed.New[*ReorgBlockRange](),
-		pendingDataFeed:          feed.New[*core.PreConfirmed](),
+		preConfirmedDataFeed:     feed.New[*core.PreConfirmed](),
 		preLatestDataFeed:        feed.New[*core.PreLatest](),
 		preLatestPollInterval:    preLatestPollInterval,
 		preConfirmedPollInterval: preConfirmedPollInterval,
@@ -566,8 +565,8 @@ func (s *Synchronizer) SubscribeReorg() ReorgSubscription {
 	return ReorgSubscription{s.reorgFeed.Subscribe()}
 }
 
-func (s *Synchronizer) SubscribePendingData() PendingDataSubscription {
-	return PendingDataSubscription{s.pendingDataFeed.Subscribe()}
+func (s *Synchronizer) SubscribePreConfirmed() PreConfirmedDataSubscription {
+	return PreConfirmedDataSubscription{s.preConfirmedDataFeed.Subscribe()}
 }
 
 func (s *Synchronizer) SubscribePreLatest() PreLatestDataSubscription {
@@ -595,7 +594,7 @@ func (s *Synchronizer) pollLatest(ctx context.Context) {
 	}
 }
 
-func (s *Synchronizer) PendingData() (*core.PreConfirmed, error) {
+func (s *Synchronizer) PreConfirmed() (*core.PreConfirmed, error) {
 	head, err := s.blockchain.HeadsHeader()
 	if err != nil {
 		if !errors.Is(err, db.ErrKeyNotFound) {
@@ -604,9 +603,9 @@ func (s *Synchronizer) PendingData() (*core.PreConfirmed, error) {
 		head = nil
 	}
 
-	preConfirmed := s.pendingData.Load()
+	preConfirmed := s.preConfirmed.Load()
 	if preConfirmed != nil && preConfirmed.Validate(head) {
-		// Special handling: if the pending data contains a 'pre-latest' block attachment
+		// Special handling: if the pre-confirmed contains a 'pre-latest' block attachment
 		// that is now outdated (head moved on), return a copy with the pre-latest attachment discarded.
 		if head != nil && preConfirmed.Block.Number == head.Number+1 && preConfirmed.PreLatest != nil {
 			return preConfirmed.Copy().WithPreLatest(nil), nil
@@ -614,11 +613,11 @@ func (s *Synchronizer) PendingData() (*core.PreConfirmed, error) {
 		return preConfirmed, nil
 	}
 
-	// Fallback: no stored pending data, or stored data failed validation.
+	// Fallback: no stored pre-confirmed, or stored data failed validation.
 	if head == nil {
 		return nil, db.ErrKeyNotFound
 	}
-	emptyPreConfirmed, err := pendingdata.MakeEmptyPreConfirmedForParent(s.blockchain, head)
+	emptyPreConfirmed, err := MakeEmptyPreConfirmedForParent(s.blockchain, head)
 	if err != nil {
 		return nil, err
 	}

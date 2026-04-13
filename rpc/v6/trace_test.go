@@ -333,7 +333,6 @@ func TestTraceTransaction(t *testing.T) {
 		require.Nil(t, header.Hash, "hash must be nil for pre_confirmed block")
 
 		mockReader.EXPECT().Receipt(hash).Return(nil, header.Hash, header.Number, nil)
-		// PendingData() always returns empty placeholder for v6;
 		// header.Number=0 so no BlockHeaderByNumber needed
 		mockReader.EXPECT().HeadsHeader().Return(header, nil)
 
@@ -494,7 +493,6 @@ func TestTraceBlockTransactions(t *testing.T) {
 	mockReader.EXPECT().Network().Return(n).AnyTimes()
 	mockVM := mocks.NewMockVM(mockCtrl)
 	log := utils.NewNopZapLogger()
-	mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
 
 	handler := rpc.New(mockReader, nil, mockVM, n, log)
 
@@ -522,20 +520,7 @@ func TestTraceBlockTransactions(t *testing.T) {
 			Transactions: []core.Transaction{l1Tx, declareTx},
 		}
 
-		pendingStateDiff := core.EmptyStateDiff()
-		preConfirmed := core.PreConfirmed{
-			Block: block,
-			StateUpdate: &core.StateUpdate{
-				StateDiff: &pendingStateDiff,
-			},
-			NewClasses: map[felt.Felt]core.ClassDefinition{*declareTx.ClassHash: declaredClass.Class},
-		}
-
 		headState := mocks.NewMockStateReader(mockCtrl)
-		mockSyncReader.EXPECT().PendingData().Return(
-			&preConfirmed,
-			nil,
-		)
 		mockReader.EXPECT().StateAtBlockHash(header.ParentHash).
 			Return(headState, nopCloser, nil).Times(2)
 

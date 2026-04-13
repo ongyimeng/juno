@@ -12,7 +12,7 @@ import (
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/NethermindEth/juno/rpc/rpccore"
-	"github.com/NethermindEth/juno/sync/pendingdata"
+	"github.com/NethermindEth/juno/sync"
 	"go.uber.org/zap"
 )
 
@@ -38,10 +38,10 @@ func (h *Handler) blockByID(blockID *BlockID) (*core.Block, *jsonrpc.Error) {
 
 	switch blockID.Type() {
 	case preConfirmed:
-		var pending *core.PreConfirmed
-		pending, err = h.syncReader.PendingData()
+		var preConfirmed *core.PreConfirmed
+		preConfirmed, err = h.syncReader.PreConfirmed()
 		if err == nil {
-			block = pending.GetBlock()
+			block = preConfirmed.GetBlock()
 		}
 	case latest:
 		block, err = h.bcReader.Head()
@@ -73,14 +73,14 @@ func (h *Handler) blockByID(blockID *BlockID) (*core.Block, *jsonrpc.Error) {
 func (h *Handler) blockTxnsByNumber(blockID *BlockID) ([]core.Transaction, *jsonrpc.Error) {
 	switch blockID.Type() {
 	case preConfirmed:
-		pending, err := h.syncReader.PendingData()
+		preConfirmed, err := h.syncReader.PreConfirmed()
 		if err != nil {
 			if errors.Is(err, db.ErrKeyNotFound) {
 				return nil, rpccore.ErrBlockNotFound
 			}
 			return nil, rpccore.ErrInternal.CloneWithData(err)
 		}
-		txns := pending.GetTransactions()
+		txns := preConfirmed.GetTransactions()
 		return txns, nil
 	default:
 		txns, err := h.bcReader.TransactionsByBlockNumber(blockID.Number())
@@ -99,10 +99,10 @@ func (h *Handler) blockHeaderByID(blockID *BlockID) (*core.Header, *jsonrpc.Erro
 	var err error
 	switch blockID.Type() {
 	case preConfirmed:
-		var pending *core.PreConfirmed
-		pending, err = h.syncReader.PendingData()
+		var preConfirmed *core.PreConfirmed
+		preConfirmed, err = h.syncReader.PreConfirmed()
 		if err == nil {
-			header = pending.GetBlock().Header
+			header = preConfirmed.GetBlock().Header
 		}
 	case latest:
 		header, err = h.bcReader.HeadsHeader()
@@ -184,10 +184,10 @@ func (h *Handler) stateByBlockID(
 	var err error
 	switch blockID.Type() {
 	case preConfirmed:
-		var pendingData *core.PreConfirmed
-		pendingData, err = h.syncReader.PendingData()
+		var preConfirmed *core.PreConfirmed
+		preConfirmed, err = h.syncReader.PreConfirmed()
 		if err == nil {
-			reader, closer, err = pendingdata.PendingState(pendingData, h.bcReader)
+			reader, closer, err = sync.PendingState(preConfirmed, h.bcReader)
 		}
 	case latest:
 		reader, closer, err = h.bcReader.HeadState()

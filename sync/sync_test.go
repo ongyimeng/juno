@@ -15,7 +15,6 @@ import (
 	"github.com/NethermindEth/juno/mocks"
 	adaptfeeder "github.com/NethermindEth/juno/starknetdata/feeder"
 	"github.com/NethermindEth/juno/sync"
-	"github.com/NethermindEth/juno/sync/pendingdata"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -241,7 +240,7 @@ func TestSubscribeNewHeads(t *testing.T) {
 	sub.Unsubscribe()
 }
 
-func TestPendingDataIsPreConfirmedAfterSync(t *testing.T) {
+func TestPreConfirmedAfterSync(t *testing.T) {
 	t.Parallel()
 
 	client := feeder.NewTestClient(t, &utils.Mainnet)
@@ -266,19 +265,21 @@ func TestPendingDataIsPreConfirmedAfterSync(t *testing.T) {
 	cancel()
 
 	// After syncing at least one block, an empty pre_confirmed baseline for head+1 is stored.
-	// PendingData() must return *core.PreConfirmed — the legacy *core.Pending no longer exists.
-	pendingData, err := synchronizer.PendingData()
+	preConfirmed, err := synchronizer.PreConfirmed()
 	require.NoError(t, err)
-	require.NotNil(t, pendingData)
+	require.NotNil(t, preConfirmed)
 
 	head, err := bc.HeadsHeader()
 	require.NoError(t, err)
-	require.True(t, pendingData.Validate(head), "pending data must be valid for the current head")
-
-	require.NotNil(t, pendingData.GetBlock())
+	require.True(
+		t,
+		preConfirmed.Validate(head),
+		"pre-confirmed must be valid for the current head",
+	)
+	require.NotNil(t, preConfirmed.GetBlock())
 }
 
-func TestPendingData(t *testing.T) {
+func TestPreConfirmed(t *testing.T) {
 	t.Parallel()
 	log := utils.NewNopZapLogger()
 	client := feeder.NewTestClient(t, &utils.Mainnet)
@@ -298,13 +299,13 @@ func TestPendingData(t *testing.T) {
 		head, err := bc.HeadsHeader()
 		require.NoError(t, err)
 
-		expectedPC, err := pendingdata.MakeEmptyPreConfirmedForParent(bc, head)
+		expectedPC, err := sync.MakeEmptyPreConfirmedForParent(bc, head)
 		require.NoError(t, err)
 		stored, err := synchronizer.StorePreConfirmed(&expectedPC)
 		require.NoError(t, err)
 		require.True(t, stored)
 
-		result, err := synchronizer.PendingData()
+		result, err := synchronizer.PreConfirmed()
 		require.NoError(t, err)
 		require.Equal(t, &expectedPC, result)
 	})
@@ -323,7 +324,7 @@ func TestPendingData(t *testing.T) {
 		head, err := bc.HeadsHeader()
 		require.NoError(t, err)
 
-		result, err := synchronizer.PendingData()
+		result, err := synchronizer.PreConfirmed()
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.True(t, result.Validate(head))

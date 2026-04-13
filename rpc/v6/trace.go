@@ -94,7 +94,7 @@ func (h *Handler) TraceTransaction(ctx context.Context, hash felt.Felt) (*Transa
 	var block *core.Block
 	isPendingBlock := blockHash == nil
 	if isPendingBlock {
-		pending, err := h.PendingData()
+		pending, err := h.Pending()
 		if err != nil {
 			// for traceTransaction handlers there is no block not found error
 			return nil, rpccore.ErrTxnHashNotFound
@@ -160,11 +160,8 @@ func (h *Handler) traceBlockTransactions(ctx context.Context, block *core.Block,
 		headState       core.StateReader
 		headStateCloser blockchain.StateCloser
 	)
-	if isPending {
-		headState, headStateCloser, err = h.PendingState()
-	} else {
-		headState, headStateCloser, err = h.bcReader.HeadState()
-	}
+
+	headState, headStateCloser, err = h.bcReader.HeadState()
 	if err != nil {
 		return nil, jsonrpc.Err(jsonrpc.InternalError, err.Error())
 	}
