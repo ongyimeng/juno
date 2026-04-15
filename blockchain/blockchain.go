@@ -77,14 +77,13 @@ var _ Reader = (*Blockchain)(nil)
 
 // Blockchain is responsible for keeping track of all things related to the Starknet blockchain
 type Blockchain struct {
-	network           *utils.Network
-	database          db.KeyValueStore
-	listener          EventListener
-	l1HeadFeed        *feed.Feed[*core.L1Head]
-	cachedFilters     *AggregatedBloomFilterCache
-	runningFilter     *core.RunningEventFilter
-	transactionLayout core.TransactionLayout
-	stateBackend      statebackend.StateBackend
+	network       *utils.Network
+	database      db.KeyValueStore
+	listener      EventListener
+	l1HeadFeed    *feed.Feed[*core.L1Head]
+	cachedFilters *AggregatedBloomFilterCache
+	runningFilter *core.RunningEventFilter
+	stateBackend  statebackend.StateBackend
 }
 
 // options holds configuration for constructing a Blockchain.
@@ -126,19 +125,17 @@ func New(database db.KeyValueStore, network *utils.Network, opts ...Option) *Blo
 	runningFilter := core.NewRunningEventFilterLazy(database)
 
 	return &Blockchain{
-		database:          database,
-		network:           network,
-		listener:          o.listener,
-		l1HeadFeed:        feed.New[*core.L1Head](),
-		cachedFilters:     &cachedFilters,
-		runningFilter:     runningFilter,
-		transactionLayout: core.TransactionLayoutCombined,
+		database:      database,
+		network:       network,
+		listener:      o.listener,
+		l1HeadFeed:    feed.New[*core.L1Head](),
+		cachedFilters: &cachedFilters,
+		runningFilter: runningFilter,
 		stateBackend: statebackend.New(
 			database,
 			runningFilter,
 			network,
 			o.stateVersion,
-			core.TransactionLayoutCombined,
 		),
 	}
 }
@@ -167,7 +164,7 @@ func (b *Blockchain) Head() (*core.Block, error) {
 		return nil, err
 	}
 
-	return b.transactionLayout.BlockByNumber(b.database, curHeight)
+	return core.GetBlockByNumber(b.database, curHeight)
 }
 
 func (b *Blockchain) HeadsHeader() (*core.Header, error) {
@@ -182,7 +179,7 @@ func (b *Blockchain) HeadsHeader() (*core.Header, error) {
 
 func (b *Blockchain) BlockByNumber(number uint64) (*core.Block, error) {
 	b.listener.OnRead("BlockByNumber")
-	return b.transactionLayout.BlockByNumber(b.database, number)
+	return core.GetBlockByNumber(b.database, number)
 }
 
 func (b *Blockchain) BlockHeaderByNumber(number uint64) (*core.Header, error) {
@@ -202,7 +199,7 @@ func (b *Blockchain) BlockByHash(hash *felt.Felt) (*core.Block, error) {
 		return nil, err
 	}
 
-	return b.transactionLayout.BlockByNumber(b.database, blockNum)
+	return core.GetBlockByNumber(b.database, blockNum)
 }
 
 func (b *Blockchain) BlockHeaderByHash(hash *felt.Felt) (*core.Header, error) {
@@ -228,19 +225,19 @@ func (b *Blockchain) L1HandlerTxnHash(msgHash *common.Hash) (felt.Felt, error) {
 // TransactionByBlockNumberAndIndex gets the transaction for a given block number and index.
 func (b *Blockchain) TransactionByBlockNumberAndIndex(blockNumber, index uint64) (core.Transaction, error) {
 	b.listener.OnRead("TransactionByBlockNumberAndIndex")
-	return b.transactionLayout.TransactionByBlockAndIndex(b.database, blockNumber, index)
+	return core.GetTransactionByBlockAndIndex(b.database, blockNumber, index)
 }
 
 // TransactionByHash gets the transaction for a given hash.
 func (b *Blockchain) TransactionByHash(hash *felt.Felt) (core.Transaction, error) {
 	b.listener.OnRead("TransactionByHash")
-	return b.transactionLayout.TransactionByHash(b.database, (*felt.TransactionHash)(hash))
+	return core.GetTransactionByHash(b.database, (*felt.TransactionHash)(hash))
 }
 
 // TransactionsByBlockNumber gets all transactions for a given block number
 func (b *Blockchain) TransactionsByBlockNumber(number uint64) ([]core.Transaction, error) {
 	b.listener.OnRead("TransactionsByBlockNumber")
-	return b.transactionLayout.TransactionsByBlockNumber(b.database, number)
+	return core.GetTransactionsByBlockNumber(b.database, number)
 }
 
 // BlockNumberAndIndexByTxHash gets transaction block number and index by Tx hash
@@ -262,7 +259,7 @@ func (b *Blockchain) Receipt(hash *felt.Felt) (*core.TransactionReceipt, *felt.F
 		return nil, nil, 0, err
 	}
 
-	receipt, err := b.transactionLayout.ReceiptByBlockAndIndex(
+	receipt, err := core.GetReceiptByBlockAndIndex(
 		b.database,
 		bnIndex.Number,
 		bnIndex.Index,
@@ -284,7 +281,7 @@ func (b *Blockchain) ReceiptByBlockNumberAndIndex(
 ) (core.TransactionReceipt, *felt.Felt, error) {
 	b.listener.OnRead("ReceiptByBlockNumberAndIndex")
 
-	receipt, err := b.transactionLayout.ReceiptByBlockAndIndex(b.database, blockNumber, index)
+	receipt, err := core.GetReceiptByBlockAndIndex(b.database, blockNumber, index)
 	if err != nil {
 		return core.TransactionReceipt{}, nil, err
 	}
@@ -390,7 +387,6 @@ func (b *Blockchain) EventFilter(
 		preConfirmedFn,
 		b.cachedFilters,
 		b.runningFilter,
-		b.transactionLayout,
 	), nil
 }
 
