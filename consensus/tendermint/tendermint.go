@@ -120,7 +120,7 @@ func (s *stateMachine[V, H, A]) startRound(r types.Round) actions.Action[V, H, A
 		if s.state.validValue != nil {
 			proposalValue = s.state.validValue
 		} else {
-			proposalValue = new(s.application.Value())
+			proposalValue = utils.HeapPtr(s.application.Value())
 		}
 		actions := s.sendProposal(proposalValue)
 		return actions
@@ -130,7 +130,7 @@ func (s *stateMachine[V, H, A]) startRound(r types.Round) actions.Action[V, H, A
 }
 
 func (t *stateMachine[V, H, A]) scheduleTimeout(s types.Step) actions.Action[V, H, A] {
-	return new(
+	return utils.HeapPtr(
 		actions.ScheduleTimeout{
 			Step:   s,
 			Height: t.state.height,
@@ -148,6 +148,6 @@ func (s *stateMachine[V, H, A]) findProposal(r types.Round) *CachedProposal[V, H
 	return &CachedProposal[V, H, A]{
 		Proposal: *proposal,
 		Valid:    s.application.Valid(*proposal.Value),
-		ID:       new((*proposal.Value).Hash()),
+		ID:       utils.HeapPtr((*proposal.Value).Hash()),
 	}
 }

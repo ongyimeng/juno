@@ -251,7 +251,7 @@ func createSimulatedTransactions(
 	simulatedTransactions := make([]SimulatedTransaction, len(overallFees))
 	for i, overallFee := range overallFees {
 		// Adapt transaction trace to rpc v9 trace
-		trace := new(AdaptVMTransactionTrace(&traces[i]))
+		trace := utils.HeapPtr(AdaptVMTransactionTrace(&traces[i]))
 
 		// Add root level execution resources
 		trace.ExecutionResources = &ExecutionResources{

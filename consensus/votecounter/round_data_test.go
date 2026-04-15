@@ -9,6 +9,7 @@ import (
 	"github.com/NethermindEth/juno/consensus/starknet"
 	"github.com/NethermindEth/juno/consensus/types"
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -68,7 +69,7 @@ func newVoteTestCase(addrIndex voter, voteType VoteType, idIndex *uint64) *voteT
 	var id *starknet.Hash
 	if idIndex != nil {
 		value := felt.FromUint64[starknet.Value](*idIndex)
-		id = new(value.Hash())
+		id = utils.HeapPtr(value.Hash())
 	}
 
 	return &voteTestCase{

@@ -2,6 +2,7 @@ package votecounter
 
 import (
 	"github.com/NethermindEth/juno/consensus/types"
+	"github.com/NethermindEth/juno/utils"
 )
 
 type roundMap[V types.Hashable[H], H types.Hash, A types.Addr] = map[types.Round]*roundData[V, H, A]
@@ -41,7 +42,7 @@ func (r *roundData[V, H, A]) addVote(vote *types.Vote[H, A], votingPower types.V
 	var perVote *ballotSet[A]
 	if vote.ID != nil {
 		if perVote = r.perIDVotes[*vote.ID]; perVote == nil {
-			perVote = new(newBallotSet[A]())
+			perVote = utils.HeapPtr(newBallotSet[A]())
 			r.perIDVotes[*vote.ID] = perVote
 		}
 	} else {

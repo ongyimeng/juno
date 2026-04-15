@@ -5,6 +5,7 @@ import (
 
 	"github.com/NethermindEth/juno/consensus/starknet"
 	"github.com/NethermindEth/juno/consensus/types/actions"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -45,7 +46,7 @@ func (a actionAsserter[T]) expectActions(expected ...starknet.Action) actionAsse
 
 func getHash(val *starknet.Value) *starknet.Hash {
 	if val != nil {
-		return new(val.Hash())
+		return utils.HeapPtr(val.Hash())
 	}
 	return nil
 }

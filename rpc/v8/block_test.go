@@ -155,7 +155,7 @@ func TestBlockTransactionCount(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 	mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
-	n := new(utils.Sepolia)
+	n := utils.HeapPtr(utils.Sepolia)
 	mockReader := mocks.NewMockReader(mockCtrl)
 	handler := rpc.New(mockReader, mockSyncReader, nil, nil)
 
@@ -650,7 +650,7 @@ func TestBlockWithTxs_TxnsFetchError(t *testing.T) {
 }
 
 func TestBlockWithTxHashesV013(t *testing.T) {
-	n := new(utils.SepoliaIntegration)
+	n := utils.HeapPtr(utils.SepoliaIntegration)
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 	mockReader := mocks.NewMockReader(mockCtrl)
@@ -679,7 +679,7 @@ func TestBlockWithTxHashesV013(t *testing.T) {
 			NewRoot:         coreBlock.GlobalStateRoot,
 			Number:          &coreBlock.Number,
 			ParentHash:      coreBlock.ParentHash,
-			L1DAMode:        new(rpc.Blob),
+			L1DAMode:        utils.HeapPtr(rpc.Blob),
 			L1GasPrice: &rpc.ResourcePrice{
 				InFri: felt.NewUnsafeFromString[felt.Felt]("0x17882b6aa74"),
 				InWei: felt.NewUnsafeFromString[felt.Felt]("0x3b9aca10"),
@@ -725,8 +725,8 @@ func TestBlockWithTxHashesV013(t *testing.T) {
 				Tip:                   new(felt.Felt).SetUint64(tx.Tip),
 				PaymasterData:         &tx.PaymasterData,
 				AccountDeploymentData: &tx.AccountDeploymentData,
-				NonceDAMode:           new(rpc.DataAvailabilityMode(tx.NonceDAMode)),
-				FeeDAMode:             new(rpc.DataAvailabilityMode(tx.FeeDAMode)),
+				NonceDAMode:           utils.HeapPtr(rpc.DataAvailabilityMode(tx.NonceDAMode)),
+				FeeDAMode:             utils.HeapPtr(rpc.DataAvailabilityMode(tx.FeeDAMode)),
 			},
 		},
 	}, got)
@@ -736,7 +736,7 @@ func TestBlockWithReceipts(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	n := new(utils.Mainnet)
+	n := utils.HeapPtr(utils.Mainnet)
 	mockReader := mocks.NewMockReader(mockCtrl)
 	mockSyncReader := mocks.NewMockSyncReader(mockCtrl)
 	handler := rpc.New(mockReader, mockSyncReader, nil, nil)
@@ -846,7 +846,7 @@ func TestRpcBlockAdaptation(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	t.Cleanup(mockCtrl.Finish)
 
-	n := new(utils.Sepolia)
+	n := utils.HeapPtr(utils.Sepolia)
 	mockReader := mocks.NewMockReader(mockCtrl)
 	handler := rpc.New(mockReader, nil, nil, nil)
 

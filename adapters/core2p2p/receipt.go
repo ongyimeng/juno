@@ -69,7 +69,7 @@ func receiptCommon(r *core.TransactionReceipt) *receipt.Receipt_Common {
 		revertReason = &r.RevertReason
 	} else if r.Reverted {
 		// in some cases receipt marked as reverted may contain empty string in revert_reason
-		revertReason = new("")
+		revertReason = utils.HeapPtr("")
 	}
 
 	return &receipt.Receipt_Common{

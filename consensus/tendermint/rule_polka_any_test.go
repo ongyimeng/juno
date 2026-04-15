@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/NethermindEth/juno/consensus/types"
+	"github.com/NethermindEth/juno/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,8 +21,8 @@ func TestPolkaAny(t *testing.T) {
 
 		// Receive 2 more prevotes combined with our own prevote, all in mixed value
 		currentRound.validator(1).prevote(nil)
-		currentRound.validator(2).prevote(new(value(44))).expectActions(
-			currentRound.action().writeWALPrevote(2, new(value(44))),
+		currentRound.validator(2).prevote(utils.HeapPtr(value(44))).expectActions(
+			currentRound.action().writeWALPrevote(2, utils.HeapPtr(value(44))),
 			currentRound.action().scheduleTimeout(types.StepPrevote),
 		)
 		assert.True(t, stateMachine.state.timeoutPrevoteScheduled)
@@ -41,7 +42,7 @@ func TestPolkaAny(t *testing.T) {
 		currentRound.validator(0).proposal(value(42), -1)
 
 		// Receive 1 more prevote (not enough for 2f+1 where f=1)
-		currentRound.validator(0).prevote(new(value(42)))
+		currentRound.validator(0).prevote(utils.HeapPtr(value(42)))
 
 		// No action should be taken
 		assertState(t, stateMachine, types.Height(0), types.Round(0), types.StepPrevote)
@@ -55,14 +56,14 @@ func TestPolkaAny(t *testing.T) {
 		currentRound.start()
 
 		// Add enough prevotes, but since we're not in prevote step, nothing should happen
-		currentRound.validator(0).prevote(new(value(42))).expectActions(
-			currentRound.action().writeWALPrevote(0, new(value(42))),
+		currentRound.validator(0).prevote(utils.HeapPtr(value(42))).expectActions(
+			currentRound.action().writeWALPrevote(0, utils.HeapPtr(value(42))),
 		)
-		currentRound.validator(1).prevote(new(value(43))).expectActions(
-			currentRound.action().writeWALPrevote(1, new(value(43))),
+		currentRound.validator(1).prevote(utils.HeapPtr(value(43))).expectActions(
+			currentRound.action().writeWALPrevote(1, utils.HeapPtr(value(43))),
 		)
-		currentRound.validator(2).prevote(new(value(44))).expectActions(
-			currentRound.action().writeWALPrevote(2, new(value(44))),
+		currentRound.validator(2).prevote(utils.HeapPtr(value(44))).expectActions(
+			currentRound.action().writeWALPrevote(2, utils.HeapPtr(value(44))),
 		)
 
 		// Assertions - still in propose step, no timeout should be scheduled
@@ -83,15 +84,15 @@ func TestPolkaAny(t *testing.T) {
 		currentRound.validator(0).prevote(nil).expectActions(
 			currentRound.action().writeWALPrevote(0, nil),
 		)
-		currentRound.validator(1).prevote(new(value(43))).expectActions(
-			currentRound.action().writeWALPrevote(1, new(value(43))),
+		currentRound.validator(1).prevote(utils.HeapPtr(value(43))).expectActions(
+			currentRound.action().writeWALPrevote(1, utils.HeapPtr(value(43))),
 			currentRound.action().scheduleTimeout(types.StepPrevote),
 		)
 		assert.True(t, stateMachine.state.timeoutPrevoteScheduled)
 
 		// Receive 1 more prevote, no timeout should be scheduled
-		currentRound.validator(2).prevote(new(value(44))).expectActions(
-			currentRound.action().writeWALPrevote(2, new(value(44))),
+		currentRound.validator(2).prevote(utils.HeapPtr(value(44))).expectActions(
+			currentRound.action().writeWALPrevote(2, utils.HeapPtr(value(44))),
 		)
 		assert.True(t, stateMachine.state.timeoutPrevoteScheduled)
 

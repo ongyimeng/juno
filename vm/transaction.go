@@ -7,6 +7,7 @@ import (
 
 	"github.com/NethermindEth/juno/core"
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 )
 
 // marshalTxn returns a json structure that includes the transaction serde will
@@ -123,7 +124,7 @@ func adaptTransaction(txn core.Transaction) *Transaction {
 		tx = &Transaction{
 			MaxFee:            t.MaxFee,
 			Version:           t.Version.AsFelt(),
-			Signature:         new(t.Signature()),
+			Signature:         utils.HeapPtr(t.Signature()),
 			Nonce:             t.Nonce,
 			ClassHash:         t.ClassHash,
 			SenderAddress:     t.SenderAddress,
@@ -131,18 +132,18 @@ func adaptTransaction(txn core.Transaction) *Transaction {
 		}
 
 		if tx.Version.Uint64() == 3 {
-			tx.ResourceBounds = new(adaptResourceBounds(t.ResourceBounds))
+			tx.ResourceBounds = utils.HeapPtr(adaptResourceBounds(t.ResourceBounds))
 			tx.Tip = new(felt.Felt).SetUint64(t.Tip)
 			tx.PaymasterData = nilToZero(t.PaymasterData)
 			tx.AccountDeploymentData = nilToZero(t.AccountDeploymentData)
-			tx.NonceDAMode = new(DataAvailabilityMode(t.NonceDAMode))
-			tx.FeeDAMode = new(DataAvailabilityMode(t.FeeDAMode))
+			tx.NonceDAMode = utils.HeapPtr(DataAvailabilityMode(t.NonceDAMode))
+			tx.FeeDAMode = utils.HeapPtr(DataAvailabilityMode(t.FeeDAMode))
 		}
 	case *core.InvokeTransaction:
 		tx = &Transaction{
 			MaxFee:             t.MaxFee,
 			Version:            t.Version.AsFelt(),
-			Signature:          new(t.Signature()),
+			Signature:          utils.HeapPtr(t.Signature()),
 			Nonce:              t.Nonce,
 			CallData:           &t.CallData,
 			ContractAddress:    t.ContractAddress,
@@ -151,12 +152,12 @@ func adaptTransaction(txn core.Transaction) *Transaction {
 		}
 
 		if t.Version.Is(3) {
-			tx.ResourceBounds = new(adaptResourceBounds(t.ResourceBounds))
+			tx.ResourceBounds = utils.HeapPtr(adaptResourceBounds(t.ResourceBounds))
 			tx.Tip = new(felt.Felt).SetUint64(t.Tip)
 			tx.PaymasterData = nilToZero(t.PaymasterData)
 			tx.AccountDeploymentData = nilToZero(t.AccountDeploymentData)
-			tx.NonceDAMode = new(DataAvailabilityMode(t.NonceDAMode))
-			tx.FeeDAMode = new(DataAvailabilityMode(t.FeeDAMode))
+			tx.NonceDAMode = utils.HeapPtr(DataAvailabilityMode(t.NonceDAMode))
+			tx.FeeDAMode = utils.HeapPtr(DataAvailabilityMode(t.FeeDAMode))
 			if t.ProofFacts != nil {
 				tx.ProofFacts = &t.ProofFacts
 			}
@@ -182,7 +183,7 @@ func adaptTransaction(txn core.Transaction) *Transaction {
 		tx = &Transaction{
 			MaxFee:              t.MaxFee,
 			Version:             t.Version.AsFelt(),
-			Signature:           new(t.Signature()),
+			Signature:           utils.HeapPtr(t.Signature()),
 			Nonce:               t.Nonce,
 			ContractAddressSalt: t.ContractAddressSalt,
 			ConstructorCallData: &t.ConstructorCallData,
@@ -190,11 +191,11 @@ func adaptTransaction(txn core.Transaction) *Transaction {
 		}
 
 		if tx.Version.Uint64() == 3 {
-			tx.ResourceBounds = new(adaptResourceBounds(t.ResourceBounds))
+			tx.ResourceBounds = utils.HeapPtr(adaptResourceBounds(t.ResourceBounds))
 			tx.Tip = new(felt.Felt).SetUint64(t.Tip)
 			tx.PaymasterData = nilToZero(t.PaymasterData)
-			tx.NonceDAMode = new(DataAvailabilityMode(t.NonceDAMode))
-			tx.FeeDAMode = new(DataAvailabilityMode(t.FeeDAMode))
+			tx.NonceDAMode = utils.HeapPtr(DataAvailabilityMode(t.NonceDAMode))
+			tx.FeeDAMode = utils.HeapPtr(DataAvailabilityMode(t.FeeDAMode))
 		}
 	default:
 		panic(fmt.Sprintf("unknown txn type in core2sn.AdaptTransaction: %T", t))

@@ -6,6 +6,7 @@ import (
 
 	"github.com/NethermindEth/juno/core"
 	"github.com/NethermindEth/juno/core/felt"
+	"github.com/NethermindEth/juno/utils"
 )
 
 type BuildState struct {
@@ -54,7 +55,7 @@ func clonePreconfirmed(preconfirmed *core.PreConfirmed) *core.PreConfirmed {
 
 func cloneBlock(block *core.Block) *core.Block {
 	return &core.Block{
-		Header:       new(*block.Header),
+		Header:       utils.HeapPtr(*block.Header),
 		Transactions: block.Transactions,
 		Receipts:     block.Receipts,
 	}
