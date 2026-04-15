@@ -14,7 +14,6 @@ import (
 	"github.com/NethermindEth/juno/db/memory"
 	"github.com/NethermindEth/juno/mocks"
 	"github.com/NethermindEth/juno/rpc/rpccore"
-	rpcv6 "github.com/NethermindEth/juno/rpc/v6"
 	rpc "github.com/NethermindEth/juno/rpc/v8"
 	"github.com/NethermindEth/juno/starknet"
 	adaptfeeder "github.com/NethermindEth/juno/starknetdata/feeder"
@@ -466,8 +465,8 @@ func TestTraceTransaction(t *testing.T) {
 				CallType:       "CALL",
 				Result:         []felt.Felt{*felt.NewUnsafeFromString[felt.Felt]("0x56414c4944")},
 				Calls:          []rpc.FunctionInvocation{},
-				Events:         []rpcv6.OrderedEvent{},
-				Messages:       []rpcv6.OrderedL2toL1Message{},
+				Events:         []rpc.OrderedEvent{},
+				Messages:       []rpc.OrderedL2toL1Message{},
 				ExecutionResources: &rpc.InnerExecutionResources{
 					L1Gas: 0,
 					L2Gas: 0,
@@ -501,7 +500,7 @@ func TestTraceTransaction(t *testing.T) {
 						CallType:       "DELEGATE",
 						Result:         []felt.Felt{*felt.NewUnsafeFromString[felt.Felt]("0x1")},
 						Calls:          []rpc.FunctionInvocation{},
-						Events: []rpcv6.OrderedEvent{
+						Events: []rpc.OrderedEvent{
 							{
 								Order: 0,
 								Keys:  []*felt.Felt{felt.NewUnsafeFromString[felt.Felt]("0x99cd8bde557814842a3121e8ddfd433a539b8c9f14bf31ebf108d12e6196e9")},
@@ -513,15 +512,15 @@ func TestTraceTransaction(t *testing.T) {
 								},
 							},
 						},
-						Messages: []rpcv6.OrderedL2toL1Message{},
+						Messages: []rpc.OrderedL2toL1Message{},
 						ExecutionResources: &rpc.InnerExecutionResources{
 							L1Gas: 0,
 							L2Gas: 0,
 						},
 					},
 				},
-				Events:   []rpcv6.OrderedEvent{},
-				Messages: []rpcv6.OrderedL2toL1Message{},
+				Events:   []rpc.OrderedEvent{},
+				Messages: []rpc.OrderedL2toL1Message{},
 				ExecutionResources: &rpc.InnerExecutionResources{
 					L1Gas: 0,
 					L2Gas: 0,
@@ -760,7 +759,7 @@ func TestAdaptVMTransactionTrace(t *testing.T) {
 			},
 			ConstructorInvocation: &vm.FunctionInvocation{},
 			FunctionInvocation:    &vm.ExecuteInvocation{},
-			StateDiff: &vm.StateDiff{ //nolint:dupl
+			StateDiff: &vm.StateDiff{ //nolint:dupl // Similar, but for different cases
 				StorageDiffs: []vm.StorageDiff{
 					{
 						Address: felt.Zero,
@@ -806,8 +805,8 @@ func TestAdaptVMTransactionTrace(t *testing.T) {
 			Type: rpc.TxnInvoke,
 			ValidateInvocation: &rpc.FunctionInvocation{
 				Calls:  []rpc.FunctionInvocation{},
-				Events: []rpcv6.OrderedEvent{},
-				Messages: []rpcv6.OrderedL2toL1Message{
+				Events: []rpc.OrderedEvent{},
+				Messages: []rpc.OrderedL2toL1Message{
 					{
 						Order: 0,
 						From:  fromAddr,
@@ -831,24 +830,24 @@ func TestAdaptVMTransactionTrace(t *testing.T) {
 			},
 			FeeTransferInvocation: &rpc.FunctionInvocation{
 				Calls:      []rpc.FunctionInvocation{},
-				Events:     []rpcv6.OrderedEvent{},
-				Messages:   []rpcv6.OrderedL2toL1Message{},
+				Events:     []rpc.OrderedEvent{},
+				Messages:   []rpc.OrderedL2toL1Message{},
 				IsReverted: false,
 			},
 			ExecuteInvocation: &rpc.ExecuteInvocation{
 				RevertReason: "",
 				FunctionInvocation: &rpc.FunctionInvocation{
 					Calls:      []rpc.FunctionInvocation{},
-					Events:     []rpcv6.OrderedEvent{},
-					Messages:   []rpcv6.OrderedL2toL1Message{},
+					Events:     []rpc.OrderedEvent{},
+					Messages:   []rpc.OrderedL2toL1Message{},
 					IsReverted: false,
 				},
 			},
-			StateDiff: &rpcv6.StateDiff{ //nolint:dupl
-				StorageDiffs: []rpcv6.StorageDiff{
+			StateDiff: &rpc.StateDiff{ //nolint:dupl // Similar, but for different cases
+				StorageDiffs: []rpc.StorageDiff{
 					{
 						Address: felt.Zero,
-						StorageEntries: []rpcv6.Entry{
+						StorageEntries: []rpc.Entry{
 							{
 								Key:   felt.Zero,
 								Value: felt.Zero,
@@ -856,13 +855,13 @@ func TestAdaptVMTransactionTrace(t *testing.T) {
 						},
 					},
 				},
-				Nonces: []rpcv6.Nonce{
+				Nonces: []rpc.Nonce{
 					{
 						ContractAddress: felt.Zero,
 						Nonce:           felt.Zero,
 					},
 				},
-				DeployedContracts: []rpcv6.DeployedContract{
+				DeployedContracts: []rpc.DeployedContract{
 					{
 						Address:   felt.Zero,
 						ClassHash: felt.Zero,
@@ -871,13 +870,13 @@ func TestAdaptVMTransactionTrace(t *testing.T) {
 				DeprecatedDeclaredClasses: []*felt.Felt{
 					&felt.Zero,
 				},
-				DeclaredClasses: []rpcv6.DeclaredClass{
+				DeclaredClasses: []rpc.DeclaredClass{
 					{
 						ClassHash:         felt.Zero,
 						CompiledClassHash: felt.Zero,
 					},
 				},
-				ReplacedClasses: []rpcv6.ReplacedClass{
+				ReplacedClasses: []rpc.ReplacedClass{
 					{
 						ContractAddress: felt.Zero,
 						ClassHash:       felt.Zero,
@@ -906,18 +905,18 @@ func TestAdaptVMTransactionTrace(t *testing.T) {
 			Type: rpc.TxnDeployAccount,
 			ValidateInvocation: &rpc.FunctionInvocation{
 				Calls:    []rpc.FunctionInvocation{},
-				Events:   []rpcv6.OrderedEvent{},
-				Messages: []rpcv6.OrderedL2toL1Message{},
+				Events:   []rpc.OrderedEvent{},
+				Messages: []rpc.OrderedL2toL1Message{},
 			},
 			FeeTransferInvocation: &rpc.FunctionInvocation{
 				Calls:    []rpc.FunctionInvocation{},
-				Events:   []rpcv6.OrderedEvent{},
-				Messages: []rpcv6.OrderedL2toL1Message{},
+				Events:   []rpc.OrderedEvent{},
+				Messages: []rpc.OrderedL2toL1Message{},
 			},
 			ConstructorInvocation: &rpc.FunctionInvocation{
 				Calls:    []rpc.FunctionInvocation{},
-				Events:   []rpcv6.OrderedEvent{},
-				Messages: []rpcv6.OrderedL2toL1Message{},
+				Events:   []rpc.OrderedEvent{},
+				Messages: []rpc.OrderedL2toL1Message{},
 			},
 		}
 
@@ -946,8 +945,8 @@ func TestAdaptVMTransactionTrace(t *testing.T) {
 				Type: rpc.TxnL1Handler,
 				FunctionInvocation: &rpc.FunctionInvocation{
 					Calls:    []rpc.FunctionInvocation{},
-					Events:   []rpcv6.OrderedEvent{},
-					Messages: []rpcv6.OrderedL2toL1Message{},
+					Events:   []rpc.OrderedEvent{},
+					Messages: []rpc.OrderedL2toL1Message{},
 				},
 			}
 
@@ -1045,12 +1044,12 @@ func TestAdaptFeederBlockTrace(t *testing.T) {
 					Type: rpc.TxnL1Handler,
 					FunctionInvocation: &rpc.FunctionInvocation{
 						Calls: []rpc.FunctionInvocation{},
-						Events: []rpcv6.OrderedEvent{{
+						Events: []rpc.OrderedEvent{{
 							Order: 1,
 							Keys:  []*felt.Felt{new(felt.Felt).SetUint64(2)},
 							Data:  []*felt.Felt{new(felt.Felt).SetUint64(3)},
 						}},
-						Messages: []rpcv6.OrderedL2toL1Message{},
+						Messages: []rpc.OrderedL2toL1Message{},
 						ExecutionResources: &rpc.InnerExecutionResources{
 							L1Gas: 10,
 							L2Gas: 11,
@@ -1092,14 +1091,14 @@ func TestAdaptFeederBlockTrace(t *testing.T) {
 					Type: rpc.TxnInvoke,
 					FeeTransferInvocation: &rpc.FunctionInvocation{
 						Calls:              []rpc.FunctionInvocation{},
-						Events:             []rpcv6.OrderedEvent{},
-						Messages:           []rpcv6.OrderedL2toL1Message{},
+						Events:             []rpc.OrderedEvent{},
+						Messages:           []rpc.OrderedL2toL1Message{},
 						ExecutionResources: &rpc.InnerExecutionResources{},
 					},
 					ValidateInvocation: &rpc.FunctionInvocation{
 						Calls:              []rpc.FunctionInvocation{},
-						Events:             []rpcv6.OrderedEvent{},
-						Messages:           []rpcv6.OrderedL2toL1Message{},
+						Events:             []rpc.OrderedEvent{},
+						Messages:           []rpc.OrderedL2toL1Message{},
 						ExecutionResources: &rpc.InnerExecutionResources{},
 					},
 					ExecuteInvocation: &rpc.ExecuteInvocation{

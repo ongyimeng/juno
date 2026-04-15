@@ -588,15 +588,15 @@ func (h *Handler) MethodsV0_8() ([]jsonrpc.Method, string) { //nolint:funlen
 	return []jsonrpc.Method{
 		{
 			Name:    "starknet_chainId",
-			Handler: h.rpcv6Handler.ChainID,
+			Handler: h.rpcv8Handler.ChainID,
 		},
 		{
 			Name:    "starknet_blockNumber",
-			Handler: h.rpcv6Handler.BlockNumber,
+			Handler: h.rpcv8Handler.BlockNumber,
 		},
 		{
 			Name:    "starknet_blockHashAndNumber",
-			Handler: h.rpcv6Handler.BlockHashAndNumber,
+			Handler: h.rpcv8Handler.BlockHashAndNumber,
 		},
 		{
 			Name:    "starknet_getBlockWithTxHashes",
@@ -621,7 +621,7 @@ func (h *Handler) MethodsV0_8() ([]jsonrpc.Method, string) { //nolint:funlen
 		{
 			Name:    "starknet_getBlockTransactionCount",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}},
-			Handler: h.rpcv6Handler.BlockTransactionCount,
+			Handler: h.rpcv8Handler.BlockTransactionCount,
 		},
 		{
 			Name:    "starknet_getTransactionByBlockIdAndIndex",
@@ -631,16 +631,16 @@ func (h *Handler) MethodsV0_8() ([]jsonrpc.Method, string) { //nolint:funlen
 		{
 			Name:    "starknet_getStateUpdate",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}},
-			Handler: h.rpcv6Handler.StateUpdate,
+			Handler: h.rpcv8Handler.StateUpdate,
 		},
 		{
 			Name:    "starknet_syncing",
-			Handler: h.rpcv6Handler.Syncing,
+			Handler: h.rpcv8Handler.Syncing,
 		},
 		{
 			Name:    "starknet_getNonce",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "contract_address"}},
-			Handler: h.rpcv6Handler.Nonce,
+			Handler: h.rpcv8Handler.Nonce,
 		},
 		{
 			Name:    "starknet_getStorageAt",
@@ -650,17 +650,17 @@ func (h *Handler) MethodsV0_8() ([]jsonrpc.Method, string) { //nolint:funlen
 		{
 			Name:    "starknet_getClassHashAt",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "contract_address"}},
-			Handler: h.rpcv6Handler.ClassHashAt,
+			Handler: h.rpcv8Handler.ClassHashAt,
 		},
 		{
 			Name:    "starknet_getClass",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "class_hash"}},
-			Handler: h.rpcv6Handler.Class,
+			Handler: h.rpcv8Handler.Class,
 		},
 		{
 			Name:    "starknet_getClassAt",
 			Params:  []jsonrpc.Parameter{{Name: "block_id"}, {Name: "contract_address"}},
-			Handler: h.rpcv6Handler.ClassAt,
+			Handler: h.rpcv8Handler.ClassAt,
 		},
 		{
 			Name:    "starknet_addInvokeTransaction",
@@ -680,7 +680,7 @@ func (h *Handler) MethodsV0_8() ([]jsonrpc.Method, string) { //nolint:funlen
 		{
 			Name:    "starknet_getEvents",
 			Params:  []jsonrpc.Parameter{{Name: "filter"}},
-			Handler: h.rpcv6Handler.Events,
+			Handler: h.rpcv8Handler.Events,
 		},
 		{
 			Name:    "juno_version",

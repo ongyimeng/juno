@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/NethermindEth/juno/core/felt"
-	rpcv6 "github.com/NethermindEth/juno/rpc/v6"
 	"github.com/NethermindEth/juno/starknet"
 	"github.com/NethermindEth/juno/utils"
 	"github.com/NethermindEth/juno/vm"
@@ -54,15 +53,15 @@ func AdaptVMTransactionTrace(trace *vm.TransactionTrace) TransactionTrace {
 		resources = utils.HeapPtr(adaptVMExecutionResources(trace.ExecutionResources))
 	}
 
-	var stateDiff *rpcv6.StateDiff
+	var stateDiff *StateDiff
 	if trace.StateDiff != nil {
-		stateDiff = utils.HeapPtr(rpcv6.AdaptVMStateDiff(trace.StateDiff))
+		stateDiff = utils.HeapPtr(AdaptVMStateDiff(trace.StateDiff))
 	}
 
 	traceType := TransactionType(trace.Type)
 	if traceType == TxnDeploy {
 		// There is no DEPLOY_TXN_TRACE thus we need to convert the type to `DEPLOY_ACCOUNT`
-		// see https://github.com/starkware-libs/starknet-specs/blob/a2d10fc6cbaddbe2d3cf6ace5174dd0a306f4885/api/starknet_trace_api_openrpc.json#L150
+		// see https://github.com/starkware-libs/starknet-specs/blob/v0.8.1/api/starknet_trace_api_openrpc.json#L150
 		traceType = TxnDeployAccount
 	}
 
@@ -98,11 +97,11 @@ func adaptVMFunctionInvocation(vmFnInvocation *vm.FunctionInvocation) FunctionIn
 	}
 
 	// Adapt events
-	adaptedEvents := make([]rpcv6.OrderedEvent, len(vmFnInvocation.Events))
+	adaptedEvents := make([]OrderedEvent, len(vmFnInvocation.Events))
 	for index := range vmFnInvocation.Events {
 		vmEvent := &vmFnInvocation.Events[index]
 
-		adaptedEvents[index] = rpcv6.OrderedEvent{
+		adaptedEvents[index] = OrderedEvent{
 			Order: vmEvent.Order,
 			Keys:  vmEvent.Keys,
 			Data:  vmEvent.Data,
@@ -110,11 +109,11 @@ func adaptVMFunctionInvocation(vmFnInvocation *vm.FunctionInvocation) FunctionIn
 	}
 
 	// Adapt messages
-	adaptedMessages := make([]rpcv6.OrderedL2toL1Message, len(vmFnInvocation.Messages))
+	adaptedMessages := make([]OrderedL2toL1Message, len(vmFnInvocation.Messages))
 	for index := range vmFnInvocation.Messages {
 		vmMessage := &vmFnInvocation.Messages[index]
 
-		adaptedMessages[index] = rpcv6.OrderedL2toL1Message{
+		adaptedMessages[index] = OrderedL2toL1Message{
 			Order: vmMessage.Order,
 			From:  vmMessage.From,
 			// todo(rdr): This is not the rigth fix, this casting should be unnecessary but the
@@ -157,6 +156,83 @@ func adaptVMExecutionResources(r *vm.ExecutionResources) ExecutionResources {
 			L2Gas: r.L2Gas,
 		},
 		L1DataGas: r.L1DataGas,
+	}
+}
+
+func AdaptVMStateDiff(vmStateDiff *vm.StateDiff) StateDiff {
+	// Adapt storage diffs
+	adaptedStorageDiffs := make([]StorageDiff, len(vmStateDiff.StorageDiffs))
+	for index := range vmStateDiff.StorageDiffs {
+		vmStorageDiff := &vmStateDiff.StorageDiffs[index]
+
+		// Adapt storage entries
+		adaptedEntries := make([]Entry, len(vmStorageDiff.StorageEntries))
+		for entryIndex := range vmStorageDiff.StorageEntries {
+			vmEntry := &vmStorageDiff.StorageEntries[entryIndex]
+
+			adaptedEntries[entryIndex] = Entry{
+				Key:   vmEntry.Key,
+				Value: vmEntry.Value,
+			}
+		}
+
+		adaptedStorageDiffs[index] = StorageDiff{
+			Address:        vmStorageDiff.Address,
+			StorageEntries: adaptedEntries,
+		}
+	}
+
+	// Adapt nonces
+	adaptedNonces := make([]Nonce, len(vmStateDiff.Nonces))
+	for index := range vmStateDiff.Nonces {
+		vmNonce := &vmStateDiff.Nonces[index]
+
+		adaptedNonces[index] = Nonce{
+			ContractAddress: vmNonce.ContractAddress,
+			Nonce:           vmNonce.Nonce,
+		}
+	}
+
+	// Adapt deployed contracts
+	adaptedDeployedContracts := make([]DeployedContract, len(vmStateDiff.DeployedContracts))
+	for index := range vmStateDiff.DeployedContracts {
+		vmDeployedContract := &vmStateDiff.DeployedContracts[index]
+
+		adaptedDeployedContracts[index] = DeployedContract{
+			Address:   vmDeployedContract.Address,
+			ClassHash: vmDeployedContract.ClassHash,
+		}
+	}
+
+	// Adapt declared classes
+	adaptedDeclaredClasses := make([]DeclaredClass, len(vmStateDiff.DeclaredClasses))
+	for index := range vmStateDiff.DeclaredClasses {
+		vmDeclaredClass := &vmStateDiff.DeclaredClasses[index]
+
+		adaptedDeclaredClasses[index] = DeclaredClass{
+			ClassHash:         vmDeclaredClass.ClassHash,
+			CompiledClassHash: vmDeclaredClass.CompiledClassHash,
+		}
+	}
+
+	// Adapt replaced classes
+	adaptedReplacedClasses := make([]ReplacedClass, len(vmStateDiff.ReplacedClasses))
+	for index := range vmStateDiff.ReplacedClasses {
+		vmReplacedClass := &vmStateDiff.ReplacedClasses[index]
+
+		adaptedReplacedClasses[index] = ReplacedClass{
+			ContractAddress: vmReplacedClass.ContractAddress,
+			ClassHash:       vmReplacedClass.ClassHash,
+		}
+	}
+
+	return StateDiff{
+		StorageDiffs:              adaptedStorageDiffs,
+		Nonces:                    adaptedNonces,
+		DeployedContracts:         adaptedDeployedContracts,
+		DeprecatedDeclaredClasses: vmStateDiff.DeprecatedDeclaredClasses,
+		DeclaredClasses:           adaptedDeclaredClasses,
+		ReplacedClasses:           adaptedReplacedClasses,
 	}
 }
 
@@ -226,11 +302,11 @@ func adaptFeederFunctionInvocation(snFnInvocation *starknet.FunctionInvocation) 
 	}
 
 	// Adapt events
-	adaptedEvents := make([]rpcv6.OrderedEvent, len(snFnInvocation.Events))
+	adaptedEvents := make([]OrderedEvent, len(snFnInvocation.Events))
 	for index := range snFnInvocation.Events {
 		snEvent := &snFnInvocation.Events[index]
 
-		adaptedEvents[index] = rpcv6.OrderedEvent{
+		adaptedEvents[index] = OrderedEvent{
 			Order: snEvent.Order,
 			Keys:  utils.Map(snEvent.Keys, utils.HeapPtr[felt.Felt]),
 			Data:  utils.Map(snEvent.Data, utils.HeapPtr[felt.Felt]),
@@ -238,13 +314,13 @@ func adaptFeederFunctionInvocation(snFnInvocation *starknet.FunctionInvocation) 
 	}
 
 	// Adapt messages
-	adaptedMessages := make([]rpcv6.OrderedL2toL1Message, len(snFnInvocation.Messages))
+	adaptedMessages := make([]OrderedL2toL1Message, len(snFnInvocation.Messages))
 	for index := range snFnInvocation.Messages {
 		snMessage := &snFnInvocation.Messages[index]
 
 		toAddr, _ := new(felt.Felt).SetString(snMessage.ToAddr)
 
-		adaptedMessages[index] = rpcv6.OrderedL2toL1Message{
+		adaptedMessages[index] = OrderedL2toL1Message{
 			Order:   snMessage.Order,
 			From:    &snFnInvocation.ContractAddress,
 			To:      toAddr,
@@ -292,13 +368,13 @@ func DefaultL1HandlerFunctionInvocation() FunctionInvocation {
 		ContractAddress:    felt.Zero,
 		EntryPointSelector: &felt.Zero,
 		EntryPointType:     "L1_HANDLER",
-		Events:             []rpcv6.OrderedEvent{},
+		Events:             []OrderedEvent{},
 		ExecutionResources: &InnerExecutionResources{
 			L1Gas: 0,
 			L2Gas: 0,
 		},
 		IsReverted: true,
-		Messages:   []rpcv6.OrderedL2toL1Message{},
+		Messages:   []OrderedL2toL1Message{},
 		Result:     []felt.Felt{},
 	}
 }
