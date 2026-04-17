@@ -2,10 +2,12 @@ package rpcv8
 
 import (
 	"github.com/NethermindEth/juno/core"
+	pendingpkg "github.com/NethermindEth/juno/core/pending"
 	"github.com/NethermindEth/juno/sync"
 )
 
-func (h *Handler) Pending() (*core.Pending, error) {
+//nolint:staticcheck // Pending is supported by RPCv8
+func (h *Handler) Pending() (*pendingpkg.Pending, error) {
 	latestHeader, err := h.bcReader.HeadsHeader()
 	if err != nil {
 		return nil, err
