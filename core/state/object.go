@@ -6,8 +6,6 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/core/trie2"
 	"github.com/NethermindEth/juno/core/trie2/trienode"
-	"github.com/NethermindEth/juno/core/trie2/trieutils"
-	"github.com/NethermindEth/juno/db"
 	"golang.org/x/exp/maps"
 )
 
@@ -40,40 +38,15 @@ func (s *stateObject) setNonce(nonce *felt.Felt) {
 	s.contract.Nonce = *nonce
 }
 
-func (s *stateObject) getStorage(key *felt.Felt) (felt.Felt, error) {
-	if value, ok := s.dirtyStorage[*key]; ok {
-		return *value, nil
-	}
-
-	tr, err := s.getStorageTrie()
-	if err != nil {
-		return felt.Zero, err
-	}
-
-	path := tr.FeltToPath(key)
-	v, err := trieutils.GetNodeByPath(
-		s.state.db.disk,
-		db.ContractTrieStorage,
-		(*felt.Address)(&s.addr),
-		&path,
-		true,
-	)
-	if err != nil {
-		return felt.Zero, err
-	}
-
-	var val felt.Felt
-	val.SetBytes(v)
-
-	return val, nil
-}
-
 func (s *stateObject) getStorageTrie() (*trie2.Trie, error) {
 	if s.storageTrie != nil {
 		return s.storageTrie, nil
 	}
 
-	storageTrie, err := s.state.db.ContractStorageTrie(&s.state.initRoot, &s.addr)
+	storageTrie, err := s.state.db.ContractStorageTrie(
+		&s.state.initRoot,
+		&s.addr,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -82,17 +55,20 @@ func (s *stateObject) getStorageTrie() (*trie2.Trie, error) {
 	return storageTrie, nil
 }
 
-func (s *stateObject) getStorageRoot() felt.Felt {
+func (s *stateObject) getStorageRoot() (felt.Felt, error) {
 	// If the storage trie is loaded, it may be modified somewhere already.
 	// Return the hash of the trie and update the contract's storage root.
 	if s.storageTrie != nil {
-		root, _ := s.storageTrie.Hash()
+		root, err := s.storageTrie.Hash()
+		if err != nil {
+			return felt.Zero, err
+		}
 		s.contract.StorageRoot = root
-		return root
+		return root, nil
 	}
 
 	// Otherwise, return the storage root from the contract.
-	return s.contract.StorageRoot
+	return s.contract.StorageRoot, nil
 }
 
 func (s *stateObject) commit() (*trienode.NodeSet, error) {
