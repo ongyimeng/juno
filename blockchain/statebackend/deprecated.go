@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/NethermindEth/juno/core"
+	"github.com/NethermindEth/juno/core/deprecatedstate"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/db/memory"
@@ -28,7 +29,7 @@ func (b *deprecatedStateBackend) StateCommitment() (felt.Felt, error) {
 	if err != nil {
 		return felt.Felt{}, err
 	}
-	return core.NewDeprecatedState(txn).Commitment(header.ProtocolVersion)
+	return deprecatedstate.New(txn).Commitment(header.ProtocolVersion)
 }
 
 func (b *deprecatedStateBackend) HeadState() (core.StateReader, StateCloser, error) {
@@ -46,7 +47,7 @@ func (b *deprecatedStateBackend) HeadState() (core.StateReader, StateCloser, err
 		return nil, nil, err
 	}
 
-	return core.NewDeprecatedState(txn), NoopStateCloser, nil
+	return deprecatedstate.New(txn), NoopStateCloser, nil
 }
 
 func (b *deprecatedStateBackend) StateAtBlockNumber(
@@ -61,8 +62,8 @@ func (b *deprecatedStateBackend) StateAtBlockNumber(
 		return nil, nil, err
 	}
 
-	return core.NewDeprecatedStateHistory(
-		core.NewDeprecatedState(txn),
+	return deprecatedstate.NewHistory(
+		deprecatedstate.New(txn),
 		blockNumber,
 	), NoopStateCloser, nil
 }
@@ -74,7 +75,7 @@ func (b *deprecatedStateBackend) StateAtBlockHash(
 	if blockHash.IsZero() {
 		memDB := memory.New()
 		txn := memDB.NewIndexedBatch()
-		return core.NewDeprecatedState(txn), NoopStateCloser, nil
+		return deprecatedstate.New(txn), NoopStateCloser, nil
 	}
 
 	txn := b.database.NewIndexedBatch() //nolint:staticcheck // indexedBatch used by old state
@@ -83,8 +84,8 @@ func (b *deprecatedStateBackend) StateAtBlockHash(
 		return nil, nil, err
 	}
 
-	return core.NewDeprecatedStateHistory(
-		core.NewDeprecatedState(txn),
+	return deprecatedstate.NewHistory(
+		deprecatedstate.New(txn),
 		header.Number,
 	), NoopStateCloser, nil
 }
@@ -100,7 +101,12 @@ func (b *deprecatedStateBackend) Store(
 		if err := verifyBlockSuccession(txn, block); err != nil {
 			return err
 		}
-		err := core.NewDeprecatedState(txn).Update(block.Header, stateUpdate, newClasses, false)
+		err := deprecatedstate.New(txn).Update(
+			block.Header,
+			stateUpdate,
+			newClasses,
+			false,
+		)
 		if err != nil {
 			return err
 		}
@@ -142,7 +148,7 @@ func (b *deprecatedStateBackend) RevertHead() error {
 			return err
 		}
 
-		if err = core.NewDeprecatedState(txn).Revert(header, stateUpdate); err != nil {
+		if err = deprecatedstate.New(txn).Revert(header, stateUpdate); err != nil {
 			return err
 		}
 
@@ -167,8 +173,8 @@ func (b *deprecatedStateBackend) GetReverseStateDiff() (core.StateDiff, error) {
 		return core.StateDiff{}, err
 	}
 
-	reverseDiff, err := core.
-		NewDeprecatedState(txn).
+	reverseDiff, err := deprecatedstate.
+		New(txn).
 		GetReverseStateDiff(blockNum, stateUpdate.StateDiff)
 	if err != nil {
 		return core.StateDiff{}, err
@@ -186,7 +192,7 @@ func (b *deprecatedStateBackend) Simulate(
 	txn := b.database.NewIndexedBatch()
 	defer txn.Close()
 
-	err := updateStateRoots(core.NewDeprecatedState(txn), block, stateUpdate, newClasses)
+	err := updateStateRoots(deprecatedstate.New(txn), block, stateUpdate, newClasses)
 	if err != nil {
 		return SimulateResult{}, err
 	}
@@ -224,7 +230,7 @@ func (b *deprecatedStateBackend) Finalise(
 ) error {
 	//nolint:staticcheck,nolintlint // used by old state
 	err := b.database.Update(func(txn db.IndexedBatch) error {
-		err := updateStateRoots(core.NewDeprecatedState(txn), block, stateUpdate, newClasses)
+		err := updateStateRoots(deprecatedstate.New(txn), block, stateUpdate, newClasses)
 		if err != nil {
 			return err
 		}

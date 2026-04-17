@@ -1,4 +1,4 @@
-package core
+package deprecatedstate
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/NethermindEth/juno/core"
 	"github.com/NethermindEth/juno/core/crypto"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/core/trie"
@@ -28,19 +29,20 @@ var (
 	ErrCheckHeadState = errors.New("check head state")
 )
 
-type DeprecatedState struct {
+type State struct {
 	txn db.IndexedBatch
 }
 
-func NewDeprecatedState(txn db.IndexedBatch) *DeprecatedState {
-	return &DeprecatedState{
+//nolint:staticcheck // Necessary for old state
+func New(txn db.IndexedBatch) *State {
+	return &State{
 		txn: txn,
 	}
 }
 
 // putNewContract creates a contract storage instance in the state and stores the relation between contract address and class hash to be
 // queried later with [GetContractClass].
-func (s *DeprecatedState) putNewContract(
+func (s *State) putNewContract(
 	stateTrie *trie.Trie,
 	addr,
 	classHash *felt.Felt,
@@ -51,7 +53,7 @@ func (s *DeprecatedState) putNewContract(
 		return err
 	}
 
-	numBytes := MarshalBlockNumber(blockNumber)
+	numBytes := core.MarshalBlockNumber(blockNumber)
 	if err = s.txn.Put(db.ContractDeploymentHeightKey(addr), numBytes); err != nil {
 		return err
 	}
@@ -60,23 +62,23 @@ func (s *DeprecatedState) putNewContract(
 }
 
 // ContractClassHash returns class hash of a contract at a given address.
-func (s *DeprecatedState) ContractClassHash(addr *felt.Felt) (felt.Felt, error) {
-	return ContractClassHash(addr, s.txn)
+func (s *State) ContractClassHash(addr *felt.Felt) (felt.Felt, error) {
+	return core.GetContractClassHash(s.txn, addr)
 }
 
 // ContractNonce returns nonce of a contract at a given address.
-func (s *DeprecatedState) ContractNonce(addr *felt.Felt) (felt.Felt, error) {
-	return ContractNonce(addr, s.txn)
+func (s *State) ContractNonce(addr *felt.Felt) (felt.Felt, error) {
+	return core.GetContractNonce(s.txn, addr)
 }
 
 // ContractStorage returns value of a key in the storage of the contract at the given address.
-func (s *DeprecatedState) ContractStorage(addr, key *felt.Felt) (felt.Felt, error) {
+func (s *State) ContractStorage(addr, key *felt.Felt) (felt.Felt, error) {
 	return ContractStorage(addr, key, s.txn)
 }
 
 // ContractStorageLastUpdatedBlock returns the most recent block number at which a given storage
 // slot key of a given contract was last updated.
-func (s *DeprecatedState) ContractStorageLastUpdatedBlock(
+func (s *State) ContractStorageLastUpdatedBlock(
 	addr *felt.Address,
 	key *felt.Felt,
 ) (uint64, error) {
@@ -89,7 +91,7 @@ func (s *DeprecatedState) ContractStorageLastUpdatedBlock(
 // Root returns the state commitment.
 // protocolVersion controls the commitment formula: since v0.14.0, the Poseidon hash
 // is always applied even when classesRoot is zero.
-func (s *DeprecatedState) Commitment(protocolVersion string) (felt.Felt, error) {
+func (s *State) Commitment(protocolVersion string) (felt.Felt, error) {
 	var storageRoot, classesRoot felt.Felt
 
 	sStorage, closer, err := s.storage()
@@ -122,8 +124,8 @@ func (s *DeprecatedState) Commitment(protocolVersion string) (felt.Felt, error) 
 		return felt.Felt{}, nil
 	}
 
-	ver, _ := ParseBlockVersion(protocolVersion)
-	if classesRoot.IsZero() && ver.LessThan(Ver0_14_0) {
+	ver, _ := core.ParseBlockVersion(protocolVersion)
+	if classesRoot.IsZero() && ver.LessThan(core.Ver0_14_0) {
 		return storageRoot, nil
 	}
 
@@ -131,31 +133,31 @@ func (s *DeprecatedState) Commitment(protocolVersion string) (felt.Felt, error) 
 	return root, nil
 }
 
-func (s *DeprecatedState) ClassTrie() (Trie, error) {
+func (s *State) ClassTrie() (core.Trie, error) {
 	// We don't need to call the closer function here because we are only reading the trie
 	tr, _, err := s.classesTrie()
 	return tr, err
 }
 
-func (s *DeprecatedState) ContractTrie() (Trie, error) {
+func (s *State) ContractTrie() (core.Trie, error) {
 	tr, _, err := s.storage()
 	return tr, err
 }
 
-func (s *DeprecatedState) ContractStorageTrie(addr *felt.Felt) (Trie, error) {
+func (s *State) ContractStorageTrie(addr *felt.Felt) (core.Trie, error) {
 	return storage(addr, s.txn)
 }
 
 // storage returns a [core.Trie] that represents the Starknet global state in the given Txn context.
-func (s *DeprecatedState) storage() (*trie.Trie, func() error, error) {
+func (s *State) storage() (*trie.Trie, func() error, error) {
 	return s.globalTrie(db.StateTrie, trie.NewTriePedersen)
 }
 
-func (s *DeprecatedState) classesTrie() (*trie.Trie, func() error, error) {
+func (s *State) classesTrie() (*trie.Trie, func() error, error) {
 	return s.globalTrie(db.ClassesTrie, trie.NewTriePoseidon)
 }
 
-func (s *DeprecatedState) globalTrie(
+func (s *State) globalTrie(
 	bucket db.Bucket,
 	newTrie trie.NewTrieFunc,
 ) (*trie.Trie, func() error, error) {
@@ -207,7 +209,7 @@ func (s *DeprecatedState) globalTrie(
 	return gTrie, closer, nil
 }
 
-func (s *DeprecatedState) verifyStateUpdateRoot(root *felt.Felt, protocolVersion string) error {
+func (s *State) verifyStateUpdateRoot(root *felt.Felt, protocolVersion string) error {
 	currentRoot, err := s.Commitment(protocolVersion)
 	if err != nil {
 		return err
@@ -225,10 +227,10 @@ func (s *DeprecatedState) verifyStateUpdateRoot(root *felt.Felt, protocolVersion
 // updated if an error is encountered during the operation. If update's
 // old or new root does not match the state's old or new roots,
 // [ErrMismatchedRoot] is returned.
-func (s *DeprecatedState) Update(
-	header *Header,
-	update *StateUpdate,
-	declaredClasses map[felt.Felt]ClassDefinition,
+func (s *State) Update(
+	header *core.Header,
+	update *core.StateUpdate,
+	declaredClasses map[felt.Felt]core.ClassDefinition,
 	skipVerifyNewRoot bool,
 ) error {
 	blockNumber := header.Number
@@ -291,10 +293,10 @@ var (
 	}
 )
 
-func (s *DeprecatedState) updateContracts(
+func (s *State) updateContracts(
 	stateTrie *trie.Trie,
 	blockNumber uint64,
-	diff *StateDiff,
+	diff *core.StateDiff,
 	logChanges bool,
 ) error {
 	// replace contract instances
@@ -305,7 +307,9 @@ func (s *DeprecatedState) updateContracts(
 		}
 
 		if logChanges {
-			if err = WriteContractClassHashHistory(s.txn, &addr, &oldClassHash, blockNumber); err != nil {
+			if err = core.WriteContractClassHashHistory(
+				s.txn, &addr, &oldClassHash, blockNumber,
+			); err != nil {
 				return err
 			}
 		}
@@ -319,7 +323,7 @@ func (s *DeprecatedState) updateContracts(
 		}
 
 		if logChanges {
-			if err = WriteContractNonceHistory(s.txn, &addr, &oldNonce, blockNumber); err != nil {
+			if err = core.WriteContractNonceHistory(s.txn, &addr, &oldNonce, blockNumber); err != nil {
 				return err
 			}
 		}
@@ -330,26 +334,31 @@ func (s *DeprecatedState) updateContracts(
 }
 
 // replaceContract replaces the class that a contract at a given address instantiates
-func (s *DeprecatedState) replaceContract(
+func (s *State) replaceContract(
 	stateTrie *trie.Trie,
 	addr,
 	classHash *felt.Felt,
 ) (felt.Felt, error) {
-	return s.updateContract(stateTrie, addr, ContractClassHash, func(c *ContractUpdater) error {
-		return c.Replace(classHash)
-	})
+	return s.updateContract(
+		stateTrie,
+		addr,
+		core.GetContractClassHash,
+		func(c *ContractUpdater) error {
+			return c.Replace(classHash)
+		},
+	)
 }
 
-func (s *DeprecatedState) putClass(
+func (s *State) putClass(
 	classHash *felt.Felt,
-	class ClassDefinition,
+	class core.ClassDefinition,
 	declaredAt uint64,
 ) error {
 	classKey := db.ClassKey(classHash)
 
 	err := s.txn.Get(classKey, func(data []byte) error { return nil })
 	if errors.Is(err, db.ErrKeyNotFound) {
-		classEncoded, encErr := encoder.Marshal(DeclaredClassDefinition{
+		classEncoded, encErr := encoder.Marshal(core.DeclaredClassDefinition{
 			At:    declaredAt,
 			Class: class,
 		})
@@ -363,35 +372,35 @@ func (s *DeprecatedState) putClass(
 }
 
 // Class returns the class object corresponding to the given classHash
-func (s *DeprecatedState) Class(classHash *felt.Felt) (*DeclaredClassDefinition, error) {
-	var class *DeclaredClassDefinition
+func (s *State) Class(classHash *felt.Felt) (*core.DeclaredClassDefinition, error) {
+	var class *core.DeclaredClassDefinition
 	err := s.txn.Get(db.ClassKey(classHash), func(data []byte) error {
 		return encoder.Unmarshal(data, &class)
 	})
 	return class, err
 }
 
-func (s *DeprecatedState) CompiledClassHash(
+func (s *State) CompiledClassHash(
 	classHash *felt.SierraClassHash,
 ) (felt.CasmClassHash, error) {
-	metadata, err := GetClassCasmHashMetadata(s.txn, classHash)
+	metadata, err := core.GetClassCasmHashMetadata(s.txn, classHash)
 	if err != nil {
 		return felt.CasmClassHash{}, err
 	}
 	return metadata.CasmHash(), nil
 }
 
-func (s *DeprecatedState) CompiledClassHashV2(
+func (s *State) CompiledClassHashV2(
 	classHash *felt.SierraClassHash,
 ) (felt.CasmClassHash, error) {
-	metadata, err := GetClassCasmHashMetadata(s.txn, classHash)
+	metadata, err := core.GetClassCasmHashMetadata(s.txn, classHash)
 	if err != nil {
 		return felt.CasmClassHash{}, err
 	}
 	return metadata.CasmHashV2(), nil
 }
 
-func (s *DeprecatedState) updateStorageBuffered(
+func (s *State) updateStorageBuffered(
 	contractAddr *felt.Felt,
 	updateDiff map[felt.Felt]*felt.Felt,
 	blockNumber uint64,
@@ -401,7 +410,7 @@ func (s *DeprecatedState) updateStorageBuffered(
 ) {
 	// to avoid multiple transactions writing to s.txn, create a buffered transaction and use that in the worker goroutine
 	bufferedTxn := db.NewBufferBatch(s.txn)
-	bufferedState := NewDeprecatedState(bufferedTxn)
+	bufferedState := New(bufferedTxn)
 	bufferedContract, err := NewContractUpdater(contractAddr, bufferedTxn)
 	if err != nil {
 		return nil, err
@@ -409,7 +418,7 @@ func (s *DeprecatedState) updateStorageBuffered(
 
 	onValueChanged := func(location, oldValue *felt.Felt) error {
 		if logChanges {
-			return WriteContractStorageHistory(
+			return core.WriteContractStorageHistory(
 				bufferedState.txn,
 				contractAddr,
 				location,
@@ -429,7 +438,7 @@ func (s *DeprecatedState) updateStorageBuffered(
 
 // updateContractStorages applies the diff set to the Trie of the
 // contract at the given address in the given Txn context.
-func (s *DeprecatedState) updateContractStorages(
+func (s *State) updateContractStorages(
 	stateTrie *trie.Trie,
 	diffs map[felt.Felt]map[felt.Felt]*felt.Felt,
 	blockNumber uint64,
@@ -509,20 +518,20 @@ func (s *DeprecatedState) updateContractStorages(
 
 // updateContractNonce updates nonce of the contract at the
 // given address in the given Txn context.
-func (s *DeprecatedState) updateContractNonce(
+func (s *State) updateContractNonce(
 	stateTrie *trie.Trie,
 	addr,
 	nonce *felt.Felt,
 ) (felt.Felt, error) {
-	return s.updateContract(stateTrie, addr, ContractNonce, func(c *ContractUpdater) error {
+	return s.updateContract(stateTrie, addr, core.GetContractNonce, func(c *ContractUpdater) error {
 		return c.UpdateNonce(nonce)
 	})
 }
 
-func (s *DeprecatedState) updateContract(
+func (s *State) updateContract(
 	stateTrie *trie.Trie,
 	addr *felt.Felt,
-	getOldValue func(*felt.Felt, db.KeyValueReader) (felt.Felt, error),
+	getOldValue func(db.KeyValueReader, *felt.Felt) (felt.Felt, error),
 	updateValue func(*ContractUpdater) error,
 ) (felt.Felt, error) {
 	contract, err := NewContractUpdater(addr, s.txn)
@@ -530,7 +539,7 @@ func (s *DeprecatedState) updateContract(
 		return felt.Felt{}, err
 	}
 
-	oldVal, err := getOldValue(addr, s.txn)
+	oldVal, err := getOldValue(s.txn, addr)
 	if err != nil {
 		return felt.Felt{}, err
 	}
@@ -547,7 +556,7 @@ func (s *DeprecatedState) updateContract(
 }
 
 // updateContractCommitment recalculates the contract commitment and updates its value in the global state Trie
-func (s *DeprecatedState) updateContractCommitment(
+func (s *State) updateContractCommitment(
 	stateTrie *trie.Trie,
 	contract *ContractUpdater,
 ) error {
@@ -556,12 +565,12 @@ func (s *DeprecatedState) updateContractCommitment(
 		return err
 	}
 
-	cHash, err := ContractClassHash(contract.Address, s.txn)
+	cHash, err := core.GetContractClassHash(s.txn, contract.Address)
 	if err != nil {
 		return err
 	}
 
-	nonce, err := ContractNonce(contract.Address, s.txn)
+	nonce, err := core.GetContractNonce(s.txn, contract.Address)
 	if err != nil {
 		return err
 	}
@@ -578,9 +587,9 @@ func calculateContractCommitment(storageRoot, classHash, nonce *felt.Felt) felt.
 	return crypto.Pedersen(&h2, &felt.Zero)
 }
 
-func (s *DeprecatedState) updateDeclaredClassesTrie(
+func (s *State) updateDeclaredClassesTrie(
 	declaredClasses map[felt.Felt]*felt.Felt,
-	classDefinitions map[felt.Felt]ClassDefinition,
+	classDefinitions map[felt.Felt]core.ClassDefinition,
 	migratedCasmClasses map[felt.SierraClassHash]felt.CasmClassHash,
 ) error {
 	classesTrie, classesCloser, err := s.classesTrie()
@@ -612,7 +621,7 @@ func (s *DeprecatedState) updateDeclaredClassesTrie(
 }
 
 // ContractDeployedAt returns if contract at given addr was deployed at blockNumber
-func (s *DeprecatedState) ContractDeployedAt(addr *felt.Felt, blockNumber uint64) (bool, error) {
+func (s *State) ContractDeployedAt(addr *felt.Felt, blockNumber uint64) (bool, error) {
 	var deployedAt uint64
 
 	err := s.txn.Get(db.ContractDeploymentHeightKey(addr), func(data []byte) error {
@@ -629,8 +638,8 @@ func (s *DeprecatedState) ContractDeployedAt(addr *felt.Felt, blockNumber uint64
 	return deployedAt <= blockNumber, nil
 }
 
-func (s *DeprecatedState) Revert(
-	header *Header, update *StateUpdate,
+func (s *State) Revert(
+	header *core.Header, update *core.StateUpdate,
 ) error {
 	blockNumber := header.Number
 	protocolVersion := header.ProtocolVersion
@@ -690,7 +699,7 @@ func (s *DeprecatedState) Revert(
 	return s.verifyStateUpdateRoot(update.OldRoot, protocolVersion)
 }
 
-func (s *DeprecatedState) purgesystemContracts() error {
+func (s *State) purgesystemContracts() error {
 	// As systemContracts are not in StateDiff.DeployedContracts we can only purge them if their storage no longer exists.
 	// Updating contracts with reverse diff will eventually lead to the deletion of noClassContract's storage key from db. Thus,
 	// we can use the lack of key's existence as reason for purging systemContracts.
@@ -717,7 +726,7 @@ func (s *DeprecatedState) purgesystemContracts() error {
 	return nil
 }
 
-func (s *DeprecatedState) removeDeclaredClasses(
+func (s *State) removeDeclaredClasses(
 	blockNumber uint64,
 	deprecatedClasses []*felt.Felt,
 	sierraClasses map[felt.Felt]*felt.Felt,
@@ -746,7 +755,7 @@ func (s *DeprecatedState) removeDeclaredClasses(
 			return fmt.Errorf("delete class: %v", err)
 		}
 
-		if _, ok := declaredClass.Class.(*SierraClass); ok {
+		if _, ok := declaredClass.Class.(*core.SierraClass); ok {
 			if _, err = classesTrie.Put(cHash, &felt.Zero); err != nil {
 				return err
 			}
@@ -755,7 +764,7 @@ func (s *DeprecatedState) removeDeclaredClasses(
 	return classesCloser()
 }
 
-func (s *DeprecatedState) purgeContract(addr *felt.Felt) error {
+func (s *State) purgeContract(addr *felt.Felt) error {
 	contract, err := NewContractUpdater(addr, s.txn)
 	if err != nil {
 		return err
@@ -781,10 +790,10 @@ func (s *DeprecatedState) purgeContract(addr *felt.Felt) error {
 	return storageCloser()
 }
 
-func (s *DeprecatedState) GetReverseStateDiff(
+func (s *State) GetReverseStateDiff(
 	blockNumber uint64,
-	diff *StateDiff,
-) (StateDiff, error) {
+	diff *core.StateDiff,
+) (core.StateDiff, error) {
 	reversed := *diff
 
 	reversed.StorageDiffs = make(map[felt.Felt]map[felt.Felt]*felt.Felt, len(diff.StorageDiffs))
@@ -795,7 +804,7 @@ func (s *DeprecatedState) GetReverseStateDiff(
 			if blockNumber > 0 {
 				oldValue, err := s.ContractStorageAt(&addr, &key, blockNumber-1)
 				if err != nil {
-					return StateDiff{}, err
+					return core.StateDiff{}, err
 				}
 				value = oldValue
 			}
@@ -811,7 +820,7 @@ func (s *DeprecatedState) GetReverseStateDiff(
 			var err error
 			oldNonce, err = s.ContractNonceAt(&addr, blockNumber-1)
 			if err != nil {
-				return StateDiff{}, err
+				return core.StateDiff{}, err
 			}
 		}
 		reversed.Nonces[addr] = &oldNonce
@@ -824,7 +833,7 @@ func (s *DeprecatedState) GetReverseStateDiff(
 			var err error
 			classHash, err = s.ContractClassHashAt(&addr, blockNumber-1)
 			if err != nil {
-				return StateDiff{}, err
+				return core.StateDiff{}, err
 			}
 		}
 		reversed.ReplacedClasses[addr] = &classHash
@@ -833,11 +842,11 @@ func (s *DeprecatedState) GetReverseStateDiff(
 	return reversed, nil
 }
 
-func (s *DeprecatedState) performStateDeletions(blockNumber uint64, diff *StateDiff) error {
+func (s *State) performStateDeletions(blockNumber uint64, diff *core.StateDiff) error {
 	// storage diffs
 	for addr, storageDiffs := range diff.StorageDiffs {
 		for key := range storageDiffs {
-			if err := DeleteContractStorageHistory(s.txn, &addr, &key, blockNumber); err != nil {
+			if err := core.DeleteContractStorageHistory(s.txn, &addr, &key, blockNumber); err != nil {
 				return err
 			}
 		}
@@ -845,14 +854,14 @@ func (s *DeprecatedState) performStateDeletions(blockNumber uint64, diff *StateD
 
 	// nonces
 	for addr := range diff.Nonces {
-		if err := DeleteContractNonceHistory(s.txn, &addr, blockNumber); err != nil {
+		if err := core.DeleteContractNonceHistory(s.txn, &addr, blockNumber); err != nil {
 			return err
 		}
 	}
 
 	// replaced classes
 	for addr := range diff.ReplacedClasses {
-		if err := DeleteContractClassHashHistory(s.txn, &addr, blockNumber); err != nil {
+		if err := core.DeleteContractClassHashHistory(s.txn, &addr, blockNumber); err != nil {
 			return err
 		}
 	}
@@ -860,7 +869,7 @@ func (s *DeprecatedState) performStateDeletions(blockNumber uint64, diff *StateD
 	return nil
 }
 
-func (s *DeprecatedState) valueAt(key []byte, height uint64) ([]byte, error) {
+func (s *State) valueAt(key []byte, height uint64) ([]byte, error) {
 	it, err := s.txn.NewIterator(nil, false)
 	if err != nil {
 		return nil, err
@@ -899,7 +908,7 @@ func (s *DeprecatedState) valueAt(key []byte, height uint64) ([]byte, error) {
 
 // ContractStorageAt returns the value of a storage location
 // of the given contract at the height `height`.
-func (s *DeprecatedState) ContractStorageAt(
+func (s *State) ContractStorageAt(
 	contractAddress,
 	storageLocation *felt.Felt,
 	height uint64,
@@ -915,7 +924,7 @@ func (s *DeprecatedState) ContractStorageAt(
 
 // ContractStorageLastUpdatedAt returns the block number at which a given storage
 // slot key of a given contract was last updated, up to and including the given block number.
-func (s *DeprecatedState) ContractStorageLastUpdatedAt(
+func (s *State) ContractStorageLastUpdatedAt(
 	addr *felt.Address,
 	key *felt.Felt,
 	blockNumber uint64,
@@ -926,7 +935,7 @@ func (s *DeprecatedState) ContractStorageLastUpdatedAt(
 	)
 }
 
-func (s *DeprecatedState) ContractNonceAt(
+func (s *State) ContractNonceAt(
 	contractAddress *felt.Felt,
 	height uint64,
 ) (felt.Felt, error) {
@@ -938,7 +947,7 @@ func (s *DeprecatedState) ContractNonceAt(
 	return felt.FromBytes[felt.Felt](value), nil
 }
 
-func (s *DeprecatedState) ContractClassHashAt(
+func (s *State) ContractClassHashAt(
 	contractAddress *felt.Felt,
 	height uint64,
 ) (felt.Felt, error) {
@@ -951,18 +960,18 @@ func (s *DeprecatedState) ContractClassHashAt(
 	return felt.FromBytes[felt.Felt](value), nil
 }
 
-func (s *DeprecatedState) CompiledClassHashAt(
+func (s *State) CompiledClassHashAt(
 	classHash *felt.SierraClassHash,
 	blockNumber uint64,
 ) (felt.CasmClassHash, error) {
-	metadata, err := GetClassCasmHashMetadata(s.txn, classHash)
+	metadata, err := core.GetClassCasmHashMetadata(s.txn, classHash)
 	if err != nil {
 		return felt.CasmClassHash{}, err
 	}
 	return metadata.CasmHashAt(blockNumber)
 }
 
-func (s *DeprecatedState) revertMigratedCasmClasses(
+func (s *State) revertMigratedCasmClasses(
 	migratedCasmClasses map[felt.SierraClassHash]felt.CasmClassHash,
 ) error {
 	classesTrie, classesCloser, err := s.classesTrie()
@@ -972,7 +981,7 @@ func (s *DeprecatedState) revertMigratedCasmClasses(
 
 	for classHash := range migratedCasmClasses {
 		classHashFelt := (*felt.Felt)(&classHash)
-		casmHashMetadata, err := GetClassCasmHashMetadata(s.txn, &classHash)
+		casmHashMetadata, err := core.GetClassCasmHashMetadata(s.txn, &classHash)
 		if err != nil {
 			return err
 		}
@@ -995,7 +1004,7 @@ func (s *DeprecatedState) revertMigratedCasmClasses(
 // a history bucket for the given key prefix. All history buckets ([ContractStorageHistory],
 // [ContractNonceHistory], and [ContractClassHashHistory]) share the same key layout:
 // prefix + uint64 block number in big-endian.
-func (s *DeprecatedState) lastUpdatedBlockNumber(
+func (s *State) lastUpdatedBlockNumber(
 	historyKeyPrefix []byte,
 	upToBlock uint64,
 ) (uint64, error) {

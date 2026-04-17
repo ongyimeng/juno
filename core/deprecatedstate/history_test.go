@@ -1,9 +1,10 @@
-package core_test
+package deprecatedstate_test
 
 import (
 	"testing"
 
 	"github.com/NethermindEth/juno/core"
+	"github.com/NethermindEth/juno/core/deprecatedstate"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/db/memory"
@@ -15,7 +16,7 @@ import (
 func TestStateHistory(t *testing.T) {
 	testDB := memory.New()
 	txn := testDB.NewIndexedBatch()
-	state := core.NewDeprecatedState(txn)
+	state := deprecatedstate.New(txn)
 
 	addr := felt.FromUint64[felt.Address](1)
 	addrFelt := felt.Felt(addr)
@@ -59,9 +60,9 @@ func TestStateHistory(t *testing.T) {
 		},
 	}, nil, true))
 
-	snapshotBeforeDeployment := core.NewDeprecatedStateHistory(state, deployedHeight-1)
-	snapshotAtDeployment := core.NewDeprecatedStateHistory(state, deployedHeight)
-	snapshotAfterChange := core.NewDeprecatedStateHistory(state, changeHeight+1)
+	snapshotBeforeDeployment := deprecatedstate.NewHistory(state, deployedHeight-1)
+	snapshotAtDeployment := deprecatedstate.NewHistory(state, deployedHeight)
+	snapshotAfterChange := deprecatedstate.NewHistory(state, changeHeight+1)
 
 	t.Run("contract not deployed", func(t *testing.T) {
 		_, err := snapshotBeforeDeployment.ContractClassHash(&addrFelt)
@@ -167,7 +168,7 @@ func TestStateHistory(t *testing.T) {
 		})
 
 		t.Run("returns deployment height between deployment and change", func(t *testing.T) {
-			snapshotBetween := core.NewDeprecatedStateHistory(state, changeHeight-1)
+			snapshotBetween := deprecatedstate.NewHistory(state, changeHeight-1)
 			blockNum, err := snapshotBetween.ContractStorageLastUpdatedBlock(
 				&addr, storageKey,
 			)
@@ -197,12 +198,12 @@ func TestStateHistory(t *testing.T) {
 		"deprecated state history trie methods return ErrHistoricalTrieNotSupported",
 		func(t *testing.T) {
 			_, err := snapshotAtDeployment.ClassTrie()
-			require.ErrorIs(t, err, core.ErrHistoricalTrieNotSupported)
+			require.ErrorIs(t, err, deprecatedstate.ErrHistoricalTrieNotSupported)
 
 			_, err = snapshotAtDeployment.ContractTrie()
-			require.ErrorIs(t, err, core.ErrHistoricalTrieNotSupported)
+			require.ErrorIs(t, err, deprecatedstate.ErrHistoricalTrieNotSupported)
 
 			_, err = snapshotAtDeployment.ContractStorageTrie(&addrFelt)
-			require.ErrorIs(t, err, core.ErrHistoricalTrieNotSupported)
+			require.ErrorIs(t, err, deprecatedstate.ErrHistoricalTrieNotSupported)
 		})
 }

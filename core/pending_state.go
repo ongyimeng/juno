@@ -8,6 +8,8 @@ import (
 	"github.com/NethermindEth/juno/db"
 )
 
+var ErrHistoricalTrieNotSupported = errors.New("cannot support historical trie")
+
 type PendingState struct {
 	stateDiff  *StateDiff
 	newClasses map[felt.Felt]ClassDefinition
