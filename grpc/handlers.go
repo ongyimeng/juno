@@ -4,14 +4,13 @@ package grpc
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/grpc/gen"
-	"github.com/NethermindEth/juno/utils"
-	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -55,7 +54,7 @@ func (h Handler) Tx(server gen.KV_TxServer) error {
 				continue
 			}
 		}
-		return utils.RunAndWrapOnError(tx.cleanup, err)
+		return errors.Join(err, tx.cleanup())
 	}
 }
 
@@ -125,7 +124,7 @@ func (h Handler) handleTxCursor(
 	}
 
 	if err != nil {
-		return errors.Wrapf(err, "cursor %d operation %q", cur.Cursor, cur.Op)
+		return fmt.Errorf("cursor %d operation %q: %w", cur.Cursor, cur.Op, err)
 	}
 
 	return server.Send(responsePair)

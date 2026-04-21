@@ -21,20 +21,6 @@ func Map[T1, T2 any](slice []T1, f func(T1) T2) []T2 {
 	return result
 }
 
-// The same as Map but the function receives a reference type
-func MapByRef[T1, T2 any](slice []T1, f func(*T1) T2) []T2 {
-	if slice == nil {
-		return nil
-	}
-
-	result := make([]T2, len(slice))
-	for i, e := range slice {
-		result[i] = f(&e)
-	}
-
-	return result
-}
-
 func Filter[T any](slice []T, f func(T) bool) []T {
 	var result []T
 	for _, e := range slice {
@@ -76,6 +62,34 @@ func Set[T comparable](slice []T) []T {
 	}
 
 	return result
+}
+
+// ToPtrSlice returns a slice of pointers, where each pointer refers to a
+// copy of the corresponding input element.
+func ToPtrSlice[T any](s []T) []*T {
+	if s == nil {
+		return nil
+	}
+	result := make([]*T, len(s))
+	for i, v := range s {
+		result[i] = &v
+	}
+	return result
+}
+
+func NonNilSlice[T any](sl []T) []T {
+	if sl == nil {
+		return []T{}
+	}
+
+	return sl
+}
+
+func DerefSlice[T any](v *[]T) []T {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 func FeltArrToString(arr []*felt.Felt) string {

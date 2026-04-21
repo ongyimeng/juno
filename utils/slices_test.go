@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/NethermindEth/juno/core/felt"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -74,6 +75,26 @@ func TestAnyOf(t *testing.T) {
 	})
 }
 
+func TestToPtrSlice(t *testing.T) {
+	t.Run("nil slice", func(t *testing.T) {
+		var input []int
+		assert.Nil(t, ToPtrSlice(input))
+	})
+
+	t.Run("pointers dereference to input values", func(t *testing.T) {
+		input := []int{1, 2, 3}
+		actual := ToPtrSlice(input)
+		assert.Equal(t, []int{1, 2, 3}, []int{*actual[0], *actual[1], *actual[2]})
+	})
+
+	t.Run("pointers do not alias the input's backing array", func(t *testing.T) {
+		input := []int{1, 2, 3}
+		actual := ToPtrSlice(input)
+		input[0] = 99
+		assert.Equal(t, 1, *actual[0], "mutation of input should not affect copied pointers")
+	})
+}
+
 func TestSet(t *testing.T) {
 	t.Run("nil slice", func(t *testing.T) {
 		var input []int
@@ -103,5 +124,71 @@ func TestSet(t *testing.T) {
 		input := []string{"a", "b", "b", "c", "c", "c"}
 		actual := Set(input)
 		assert.Equal(t, []string{"a", "b", "c"}, actual)
+	})
+}
+
+func TestNonNilSlice(t *testing.T) {
+	t.Run("nil slice returns empty non-nil slice", func(t *testing.T) {
+		var input []int
+		actual := NonNilSlice(input)
+		assert.NotNil(t, actual)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("empty slice is returned as-is", func(t *testing.T) {
+		input := []int{}
+		actual := NonNilSlice(input)
+		assert.NotNil(t, actual)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("non-empty slice is returned unchanged", func(t *testing.T) {
+		input := []int{1, 2, 3}
+		actual := NonNilSlice(input)
+		assert.Equal(t, []int{1, 2, 3}, actual)
+	})
+}
+
+func TestDerefSlice(t *testing.T) {
+	t.Run("nil pointer returns nil", func(t *testing.T) {
+		var input *[]int
+		actual := DerefSlice(input)
+		assert.Nil(t, actual)
+	})
+
+	t.Run("pointer to empty slice returns empty slice", func(t *testing.T) {
+		input := []int{}
+		actual := DerefSlice(&input)
+		assert.NotNil(t, actual)
+		assert.Empty(t, actual)
+	})
+
+	t.Run("pointer to non-empty slice returns the underlying slice", func(t *testing.T) {
+		input := []int{1, 2, 3}
+		actual := DerefSlice(&input)
+		assert.Equal(t, []int{1, 2, 3}, actual)
+	})
+}
+
+func TestFeltArrToString(t *testing.T) {
+	t.Run("empty slice returns empty string", func(t *testing.T) {
+		actual := FeltArrToString([]*felt.Felt{})
+		assert.Equal(t, "", actual)
+	})
+
+	t.Run("single element has no separator", func(t *testing.T) {
+		input := []*felt.Felt{felt.NewFromUint64[felt.Felt](1)}
+		actual := FeltArrToString(input)
+		assert.Equal(t, "0x1", actual)
+	})
+
+	t.Run("multiple elements are comma-separated", func(t *testing.T) {
+		input := []*felt.Felt{
+			felt.NewFromUint64[felt.Felt](1),
+			felt.NewFromUint64[felt.Felt](2),
+			felt.NewFromUint64[felt.Felt](255),
+		}
+		actual := FeltArrToString(input)
+		assert.Equal(t, "0x1, 0x2, 0xff", actual)
 	})
 }

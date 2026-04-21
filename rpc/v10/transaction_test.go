@@ -1454,11 +1454,11 @@ func TestAddTransaction(t *testing.T) {
 				Times(1)
 
 			handler := rpcv10.New(nil, nil, nil, utils.NewNopZapLogger())
-			_, rpcErr := handler.AddTransaction(t.Context(), utils.HeapPtr(test.txn))
+			_, rpcErr := handler.AddTransaction(t.Context(), new(test.txn))
 			require.Equal(t, rpcErr.Code, rpccore.ErrInternal.Code)
 
 			handler = handler.WithGateway(mockGateway)
-			got, rpcErr := handler.AddTransaction(t.Context(), utils.HeapPtr(test.txn))
+			got, rpcErr := handler.AddTransaction(t.Context(), new(test.txn))
 			require.Nil(t, rpcErr)
 			require.Equal(t, rpcv10.AddTxResponse{
 				TransactionHash: felt.FromUint64[felt.TransactionHash](0x1),
@@ -1539,7 +1539,7 @@ func TestAddTransaction(t *testing.T) {
 				handler := rpcv10.New(nil, nil, nil, utils.NewNopZapLogger()).WithGateway(mockGateway)
 				addTxRes, rpcErr := handler.AddTransaction(
 					t.Context(),
-					utils.HeapPtr(tests["invoke v0"].txn),
+					new(tests["invoke v0"].txn),
 				)
 
 				require.Equal(t, tc.expectedError, rpcErr)
@@ -1971,7 +1971,7 @@ func TestAdaptBroadcastedTransactionValidation(t *testing.T) {
 	}
 
 	t.Run("RejectInvalidProofFormatOnInvoke", func(t *testing.T) {
-		correctBroadcastedTxn.Proof = utils.Base64("not-valid-base64")
+		correctBroadcastedTxn.Proof = core.Base64("not-valid-base64")
 
 		err := validate.Struct(correctBroadcastedTxn)
 		require.Error(
@@ -1982,7 +1982,7 @@ func TestAdaptBroadcastedTransactionValidation(t *testing.T) {
 	})
 
 	t.Run("AcceptEmptyProofOnInvoke", func(t *testing.T) {
-		correctBroadcastedTxn.Proof = utils.Base64("")
+		correctBroadcastedTxn.Proof = core.Base64("")
 
 		err := validate.Struct(correctBroadcastedTxn)
 		require.NoError(
@@ -1993,7 +1993,7 @@ func TestAdaptBroadcastedTransactionValidation(t *testing.T) {
 	})
 
 	t.Run("AcceptInvokeV3WithProofAndProofFacts", func(t *testing.T) {
-		correctBroadcastedTxn.Proof = utils.Base64("AAAAAQAAAAIAAAAD")
+		correctBroadcastedTxn.Proof = core.Base64("AAAAAQAAAAIAAAAD")
 		correctBroadcastedTxn.ProofFacts = &[]felt.Felt{felt.FromUint64[felt.Felt](100)}
 
 		err := validate.Struct(correctBroadcastedTxn.Transaction)
