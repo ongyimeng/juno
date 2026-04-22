@@ -8,6 +8,7 @@ import (
 	"github.com/NethermindEth/juno/blockchain/networks"
 	"github.com/NethermindEth/juno/clients/feeder"
 	"github.com/NethermindEth/juno/core"
+	"github.com/NethermindEth/juno/core/deprecatedstate"
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/core/pending"
 	"github.com/NethermindEth/juno/db"
@@ -154,15 +155,16 @@ func TestStore(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("add block to empty blockchain", func(t *testing.T) {
-		chain := blockchain.New(memory.New(), &networks.Mainnet)
+		testDB := memory.New()
+
+		chain := blockchain.New(testDB, &networks.Mainnet)
 		require.NoError(t, chain.Store(block0, &emptyCommitments, stateUpdate0, nil))
 
 		headBlock, err := chain.Head()
 		require.NoError(t, err)
 		assert.Equal(t, block0, headBlock)
 
-		root, err := chain.StateCommitment()
-		require.NoError(t, err)
+		root := chainStateCommitment(t, testDB)
 		assert.Equal(t, stateUpdate0.NewRoot, &root)
 
 		got0Block, err := chain.BlockByNumber(0)
@@ -175,13 +177,15 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("add block to non-empty blockchain", func(t *testing.T) {
+		testDB := memory.New()
+
 		block1, err := gw.BlockByNumber(t.Context(), 1)
 		require.NoError(t, err)
 
 		stateUpdate1, err := gw.StateUpdate(t.Context(), 1)
 		require.NoError(t, err)
 
-		chain := blockchain.New(memory.New(), &networks.Mainnet)
+		chain := blockchain.New(testDB, &networks.Mainnet)
 		require.NoError(t, chain.Store(block0, &emptyCommitments, stateUpdate0, nil))
 		require.NoError(t, chain.Store(block1, &emptyCommitments, stateUpdate1, nil))
 
@@ -189,8 +193,7 @@ func TestStore(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, block1, headBlock)
 
-		root, err := chain.StateCommitment()
-		require.NoError(t, err)
+		root := chainStateCommitment(t, testDB)
 		assert.Equal(t, stateUpdate1.NewRoot, &root)
 
 		got1Block, err := chain.BlockByNumber(1)
@@ -828,8 +831,7 @@ func TestRevertHeadMigratedCasmClasses(t *testing.T) {
 	gotCasmHash, err := state.CompiledClassHash(&sierraHash)
 	require.NoError(t, err)
 	assert.Equal(t, v2CasmHash, gotCasmHash, "should return V2 after migrating class")
-	gotRoot, err := chain.StateCommitment()
-	require.NoError(t, err)
+	gotRoot := chainStateCommitment(t, testDB)
 	assert.Equal(t, stateUpdate1.NewRoot, &gotRoot)
 
 	// Revert head should revert the state to casm hash v1
@@ -843,8 +845,7 @@ func TestRevertHeadMigratedCasmClasses(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, v1CasmHash, gotCasmHash, "should return V1 after reverting migrated class")
 
-	gotRoot, err = chain.StateCommitment()
-	require.NoError(t, err)
+	gotRoot = chainStateCommitment(t, testDB)
 	assert.Equal(t, stateUpdate0.NewRoot, &gotRoot, "state root after revert should match block 0")
 }
 
@@ -949,8 +950,7 @@ func TestRevertHeadDeclaredV2CasmClasses(t *testing.T) {
 	_, err = state.CompiledClassHash(&sierraHash)
 	assert.Error(t, err, "should error after reverting declared V2 class")
 
-	gotRoot, err := chain.StateCommitment()
-	require.NoError(t, err)
+	gotRoot := chainStateCommitment(t, testDB)
 	assert.Equal(t, stateUpdate0.NewRoot, &gotRoot, "state root after revert should match block 0")
 }
 
@@ -994,9 +994,15 @@ func TestSubscribeL1Head(t *testing.T) {
 	assert.Equal(t, l1Head, got)
 }
 
-func TestStateCommitmentEmptyChain(t *testing.T) {
-	chain := blockchain.New(memory.New(), &networks.Mainnet)
-	commitment, err := chain.StateCommitment()
+func chainStateCommitment(t *testing.T, database db.KeyValueStore) felt.Felt {
+	height, err := core.GetChainHeight(database)
 	require.NoError(t, err)
-	assert.Equal(t, felt.Felt{}, commitment)
+	header, err := core.GetBlockHeaderByNumber(database, height)
+	require.NoError(t, err)
+
+	//nolint:staticcheck,nolintlint // used by old state
+	txn := database.NewIndexedBatch()
+	commitment, err := deprecatedstate.New(txn).Commitment(header.ProtocolVersion)
+	require.NoError(t, err)
+	return commitment
 }
