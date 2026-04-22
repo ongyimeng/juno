@@ -7,7 +7,7 @@ import (
 	"github.com/NethermindEth/juno/consensus/proposal"
 	"github.com/NethermindEth/juno/consensus/starknet"
 	"github.com/NethermindEth/juno/consensus/types"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/starknet-io/starknet-p2p-specs/p2p/proto/consensus/consensus"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -17,7 +17,7 @@ import (
 // Each part is delivered via the input channel, then ordered and validated.
 // Once a complete and valid proposal is assembled, it is sent to the caller via the outputs channel.
 type proposalStream struct {
-	log                utils.Logger
+	logger             log.Logger
 	proposalStore      *proposal.ProposalStore[starknet.Hash]
 	input              chan *consensus.StreamMessage
 	outputs            chan<- *starknet.Proposal
@@ -29,14 +29,14 @@ type proposalStream struct {
 }
 
 func newSingleProposalStream(
-	log utils.Logger,
+	logger log.Logger,
 	proposalStore *proposal.ProposalStore[starknet.Hash],
 	transition Transition,
 	inputBufferSize int,
 	outputs chan<- *starknet.Proposal,
 ) *proposalStream {
 	return &proposalStream{
-		log:                log,
+		logger:             logger,
 		proposalStore:      proposalStore,
 		input:              make(chan *consensus.StreamMessage, inputBufferSize),
 		outputs:            outputs,
@@ -76,7 +76,7 @@ func (s *proposalStream) loop(ctx context.Context) {
 			return
 		case streamMessage := <-s.input:
 			if err := s.processMessages(ctx, streamMessage); err != nil {
-				s.log.Error("error processing message", zap.Error(err))
+				s.logger.Error("error processing message", zap.Error(err))
 				return
 			}
 		}

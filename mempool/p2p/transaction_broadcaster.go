@@ -7,31 +7,36 @@ import (
 	"github.com/NethermindEth/juno/adapters/mempool2p2p"
 	"github.com/NethermindEth/juno/consensus/p2p/buffered"
 	"github.com/NethermindEth/juno/mempool"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/starknet-io/starknet-p2p-specs/p2p/proto/mempool/transaction"
 	"go.uber.org/zap"
 )
 
 type transactionBroadcaster struct {
 	buffered.ProtoBroadcaster[*transaction.MempoolTransaction]
-	log utils.Logger
+	logger log.Logger
 }
 
 func NewTransactionBroadcaster(
-	log utils.Logger,
+	logger log.Logger,
 	bufferSize int,
 	retryInterval time.Duration,
 ) transactionBroadcaster {
 	return transactionBroadcaster{
-		log:              log,
-		ProtoBroadcaster: buffered.NewProtoBroadcaster[*transaction.MempoolTransaction](log, bufferSize, retryInterval, nil),
+		logger: logger,
+		ProtoBroadcaster: buffered.NewProtoBroadcaster[*transaction.MempoolTransaction](
+			logger,
+			bufferSize,
+			retryInterval,
+			nil,
+		),
 	}
 }
 
 func (b *transactionBroadcaster) Broadcast(ctx context.Context, message *mempool.BroadcastedTransaction) {
 	msg, err := mempool2p2p.AdaptTransaction(message)
 	if err != nil {
-		b.log.Error("unable to convert transaction", zap.Error(err))
+		b.logger.Error("unable to convert transaction", zap.Error(err))
 		return
 	}
 

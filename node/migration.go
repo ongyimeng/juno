@@ -8,7 +8,7 @@ import (
 	"github.com/NethermindEth/juno/migration"
 	"github.com/NethermindEth/juno/migration/blocktransactions"
 	"github.com/NethermindEth/juno/migration/deprecated" //nolint:staticcheck,nolintlint,lll // ignore statick check package will be removed in future, nolinlint because main config does not check
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 )
 
 // registerMigrations creates and configures the migration registry with all migrations.
@@ -31,7 +31,7 @@ func migrateIfNeeded(
 	ctx context.Context,
 	db db.KeyValueStore,
 	config *Config,
-	log utils.Logger,
+	logger log.Logger,
 ) error {
 	migrateFn := func() error {
 		// Run deprecated migrations first
@@ -39,7 +39,7 @@ func migrateIfNeeded(
 			ctx,
 			db,
 			&config.Network,
-			log,
+			logger,
 		); err != nil {
 			return fmt.Errorf("deprecated migration failed: %w", err)
 		}
@@ -50,7 +50,7 @@ func migrateIfNeeded(
 			registry,
 			db,
 			&config.Network,
-			log,
+			logger,
 		)
 		if err != nil {
 			return fmt.Errorf("create migration runner: %w", err)
@@ -61,7 +61,7 @@ func migrateIfNeeded(
 
 	if config.HTTP {
 		return migration.RunWithServer(
-			log,
+			logger,
 			config.HTTPHost,
 			config.HTTPPort,
 			migrateFn,

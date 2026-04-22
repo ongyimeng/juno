@@ -14,7 +14,7 @@ import (
 	"github.com/NethermindEth/juno/migration/pipeline"
 	progresslogger "github.com/NethermindEth/juno/migration/progresslogger"
 	"github.com/NethermindEth/juno/migration/semaphore"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"go.uber.org/zap"
 )
 
@@ -45,7 +45,7 @@ func (m *Migrator) Migrate(
 	ctx context.Context,
 	database db.KeyValueStore,
 	_ *networks.Network,
-	log utils.StructuredLogger,
+	logger log.StructuredLogger,
 ) ([]byte, error) {
 	chainHeight, err := core.GetChainHeight(database)
 	if err != nil {
@@ -56,22 +56,26 @@ func (m *Migrator) Migrate(
 	}
 
 	if m.startFrom > 0 {
-		log.Info("Resuming L1 handler message hash migration",
+		logger.Info("Resuming L1 handler message hash migration",
 			zap.Uint64("chain_height", chainHeight),
 			zap.Uint64("from_block", m.startFrom),
 		)
 	} else {
-		log.Info("Starting L1 handler message hash migration",
+		logger.Info("Starting L1 handler message hash migration",
 			zap.Uint64("chain_height", chainHeight),
 		)
 	}
 
 	numWorkers := runtime.GOMAXPROCS(0)
-	progressTracker := deprecatedprogresslogger.NewBlockProgressTracker(log, chainHeight, m.startFrom)
+	progressTracker := deprecatedprogresslogger.NewBlockProgressTracker(
+		logger,
+		chainHeight,
+		m.startFrom,
+	)
 	resumeFrom, err := migrateBlockRange(
 		ctx,
 		database,
-		log,
+		logger,
 		m.startFrom,
 		chainHeight,
 		numWorkers,
@@ -82,14 +86,14 @@ func (m *Migrator) Migrate(
 	}
 
 	if shouldResume := resumeFrom <= chainHeight; shouldResume {
-		log.Info("L1 handler message hash migration interrupted",
+		logger.Info("L1 handler message hash migration interrupted",
 			zap.Uint64("resume_from", resumeFrom),
 			zap.Duration("elapsed", progressTracker.Elapsed()),
 		)
 		return encodeIntermediateState(resumeFrom), nil
 	}
 
-	log.Info("L1 handler message hash migration completed",
+	logger.Info("L1 handler message hash migration completed",
 		zap.Duration("elapsed", progressTracker.Elapsed()),
 	)
 	return nil, nil
@@ -98,7 +102,7 @@ func (m *Migrator) Migrate(
 func migrateBlockRange(
 	ctx context.Context,
 	database db.KeyValueStore,
-	logger utils.StructuredLogger,
+	logger log.StructuredLogger,
 	startFrom uint64,
 	rangeEnd uint64,
 	maxWorkers int,

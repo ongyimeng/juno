@@ -20,7 +20,7 @@ import (
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/p2p/sync"
 	"github.com/NethermindEth/juno/starknet/compiler"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/juno/vm"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -35,7 +35,7 @@ type ConsensusServices struct {
 
 func Init(
 	host host.Host,
-	logger *utils.ZapLogger,
+	logger *log.ZapLogger,
 	database db.KeyValueStore,
 	blockchain *blockchain.Blockchain,
 	vm vm.VM,

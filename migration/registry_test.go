@@ -7,7 +7,7 @@ import (
 	"github.com/NethermindEth/juno/blockchain/networks"
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/migration"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +31,7 @@ func (m *mockMigration) Migrate(
 	ctx context.Context,
 	database db.KeyValueStore,
 	network *networks.Network,
-	log utils.StructuredLogger,
+	logger log.StructuredLogger,
 ) ([]byte, error) {
 	m.migrateCalled = true
 	return m.intermediateState, m.migrateErr

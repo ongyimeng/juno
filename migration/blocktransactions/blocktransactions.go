@@ -14,7 +14,7 @@ import (
 	"github.com/NethermindEth/juno/migration"
 	"github.com/NethermindEth/juno/migration/pipeline"
 	"github.com/NethermindEth/juno/migration/semaphore"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 )
 
 const (
@@ -73,7 +73,7 @@ var (
 func migrateBlockRange(
 	ctx context.Context,
 	database db.KeyValueStore,
-	logger utils.StructuredLogger,
+	logger log.StructuredLogger,
 	firstBlock,
 	chainHeight uint64,
 ) pipeline.Result {
@@ -120,7 +120,7 @@ func (Migrator) Migrate(
 	ctx context.Context,
 	database db.KeyValueStore,
 	network *networks.Network,
-	logger utils.StructuredLogger,
+	logger log.StructuredLogger,
 ) ([]byte, error) {
 	chainHeight, err := core.GetChainHeight(database)
 	if err != nil {

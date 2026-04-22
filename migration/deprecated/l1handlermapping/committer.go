@@ -4,19 +4,19 @@ import (
 	"github.com/NethermindEth/juno/db"
 	"github.com/NethermindEth/juno/migration/pipeline"
 	"github.com/NethermindEth/juno/migration/semaphore"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"go.uber.org/zap"
 )
 
 type committer struct {
-	logger         utils.StructuredLogger
+	logger         log.StructuredLogger
 	batchSemaphore semaphore.ResourceSemaphore[db.Batch]
 }
 
 var _ pipeline.State[db.Batch, struct{}] = (*committer)(nil)
 
 func newCommitter(
-	logger utils.StructuredLogger,
+	logger log.StructuredLogger,
 	batchSemaphore semaphore.ResourceSemaphore[db.Batch],
 ) *committer {
 	return &committer{

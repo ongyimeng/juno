@@ -9,7 +9,7 @@ import (
 	"github.com/NethermindEth/juno/consensus/proposal"
 	"github.com/NethermindEth/juno/consensus/starknet"
 	"github.com/NethermindEth/juno/consensus/types"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/sourcegraph/conc"
 	"github.com/sourcegraph/conc/pool"
@@ -48,7 +48,7 @@ type ProposalStreamDemux[V types.Hashable[H], H types.Hash, A types.Addr] interf
 // Although the methods must be called sequentially and the streams are created, loaded, started, and stopped sequentially,
 // the streams run concurrently.
 type proposalStreamDemux struct {
-	log                  utils.Logger
+	logger               log.Logger
 	proposalStore        *proposal.ProposalStore[starknet.Hash]
 	transition           Transition
 	bufferSizeConfig     *config.BufferSizes
@@ -62,7 +62,7 @@ type proposalStreamDemux struct {
 }
 
 func NewProposalStreamDemux(
-	log utils.Logger,
+	logger log.Logger,
 	proposalStore *proposal.ProposalStore[starknet.Hash],
 	transition Transition,
 	bufferSizeConfig *config.BufferSizes,
@@ -70,7 +70,7 @@ func NewProposalStreamDemux(
 	currentHeight types.Height,
 ) ProposalStreamDemux[starknet.Value, starknet.Hash, starknet.Address] {
 	return &proposalStreamDemux{
-		log:              log,
+		logger:           logger,
 		proposalStore:    proposalStore,
 		transition:       transition,
 		bufferSizeConfig: bufferSizeConfig,
@@ -102,7 +102,7 @@ func (t *proposalStreamDemux) Loop(ctx context.Context, topic *pubsub.Topic) {
 				return
 			case message := <-messages:
 				if err := t.processStreamMessage(ctx, message); err != nil {
-					t.log.Error("error processing stream message", zap.Error(err))
+					t.logger.Error("error processing stream message", zap.Error(err))
 				}
 			case height, ok := <-t.commitNotifier:
 				if !ok {
@@ -115,7 +115,7 @@ func (t *proposalStreamDemux) Loop(ctx context.Context, topic *pubsub.Topic) {
 
 				// Process the commit
 				if err := t.processCommit(height); err != nil {
-					t.log.Error("error processing commit", zap.Error(err))
+					t.logger.Error("error processing commit", zap.Error(err))
 				}
 			}
 		}
@@ -130,7 +130,11 @@ func (t *proposalStreamDemux) Loop(ctx context.Context, topic *pubsub.Topic) {
 			case messages <- message:
 			}
 		}
-		topicSubscription := buffered.NewTopicSubscription(t.log, t.bufferSizeConfig.ProposalDemux, onMessage)
+		topicSubscription := buffered.NewTopicSubscription(
+			t.logger,
+			t.bufferSizeConfig.ProposalDemux,
+			onMessage,
+		)
 		topicSubscription.Loop(ctx, topic)
 	})
 
@@ -250,7 +254,13 @@ func (t *proposalStreamDemux) getStream(id streamID) *proposalStream {
 	if stream, exists := t.streams[id]; exists {
 		return stream
 	}
-	stream := newSingleProposalStream(t.log, t.proposalStore, t.transition, t.bufferSizeConfig.ProposalSingleStreamInput, t.outputs)
+	stream := newSingleProposalStream(
+		t.logger,
+		t.proposalStore,
+		t.transition,
+		t.bufferSizeConfig.ProposalSingleStreamInput,
+		t.outputs,
+	)
 	t.streams[id] = stream
 	return stream
 }

@@ -19,7 +19,7 @@ import (
 	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/NethermindEth/juno/service"
 	"github.com/NethermindEth/juno/sync"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
@@ -98,7 +98,7 @@ func makeRPCOverHTTP(
 	port uint16,
 	servers map[string]*jsonrpc.Server,
 	httpHandlers map[string]http.HandlerFunc,
-	log utils.StructuredLogger,
+	logger log.StructuredLogger,
 	metricsEnabled bool,
 	corsEnabled bool,
 	rpcRequestTimeout time.Duration,
@@ -110,7 +110,7 @@ func makeRPCOverHTTP(
 
 	mux := http.NewServeMux()
 	for path, server := range servers {
-		httpHandler := jsonrpc.NewHTTP(server, log).
+		httpHandler := jsonrpc.NewHTTP(server, logger).
 			WithRequestTimeout(rpcRequestTimeout)
 		if listener != nil {
 			httpHandler = httpHandler.WithListener(listener)
@@ -134,7 +134,7 @@ func makeRPCOverHTTP(
 }
 
 func makeRPCOverWebsocket(host string, port uint16, servers map[string]*jsonrpc.Server,
-	log utils.StructuredLogger, metricsEnabled bool, corsEnabled bool,
+	logger log.StructuredLogger, metricsEnabled bool, corsEnabled bool,
 ) *httpService {
 	var listener jsonrpc.NewRequestListener
 	if metricsEnabled {
@@ -145,7 +145,7 @@ func makeRPCOverWebsocket(host string, port uint16, servers map[string]*jsonrpc.
 
 	mux := http.NewServeMux()
 	for path, server := range servers {
-		wsHandler := jsonrpc.NewWebsocket(server, shutdown, log)
+		wsHandler := jsonrpc.NewWebsocket(server, shutdown, logger)
 		if listener != nil {
 			wsHandler = wsHandler.WithListener(listener)
 		}
@@ -173,10 +173,15 @@ func makeMetrics(host string, port uint16) *httpService {
 }
 
 // Create a new service that updates the log level and timeouts settings.
-func makeHTTPUpdateService(host string, port uint16, logLevel *utils.LogLevel, feederClient *feeder.Client) *httpService {
+func makeHTTPUpdateService(
+	host string,
+	port uint16,
+	logLevel *log.Level,
+	feederClient *feeder.Client,
+) *httpService {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/log/level", func(w http.ResponseWriter, r *http.Request) {
-		utils.HTTPLogSettings(w, r, logLevel)
+		log.HTTPLogSettings(w, r, logLevel)
 	})
 	mux.HandleFunc("/feeder/timeouts", func(w http.ResponseWriter, r *http.Request) {
 		feeder.HTTPTimeoutsSettings(w, r, feederClient)

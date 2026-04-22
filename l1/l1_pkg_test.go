@@ -14,7 +14,7 @@ import (
 	"github.com/NethermindEth/juno/db/memory"
 	"github.com/NethermindEth/juno/l1/contract"
 	"github.com/NethermindEth/juno/mocks"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,14 +56,14 @@ type logStateUpdate struct {
 	removed bool
 }
 
-func (log *logStateUpdate) ToContractType() *contract.StarknetLogStateUpdate {
+func (logSU *logStateUpdate) ToContractType() *contract.StarknetLogStateUpdate {
 	return &contract.StarknetLogStateUpdate{
-		BlockNumber: new(big.Int).SetUint64(log.l2BlockNumber),
-		BlockHash:   new(big.Int).SetUint64(log.l2BlockNumber),
-		GlobalRoot:  new(big.Int).SetUint64(log.l2BlockNumber),
+		BlockNumber: new(big.Int).SetUint64(logSU.l2BlockNumber),
+		BlockHash:   new(big.Int).SetUint64(logSU.l2BlockNumber),
+		GlobalRoot:  new(big.Int).SetUint64(logSU.l2BlockNumber),
 		Raw: types.Log{
-			Removed:     log.removed,
-			BlockNumber: log.l1BlockNumber,
+			Removed:     logSU.removed,
+			BlockNumber: logSU.l1BlockNumber,
 		},
 	}
 }
@@ -335,7 +335,7 @@ func TestClient(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
-			nopLog := utils.NewNopZapLogger()
+			nopLog := log.NewNopZapLogger()
 			network := networks.Mainnet
 			chain := blockchain.New(memory.New(), &network)
 
@@ -396,7 +396,7 @@ func TestUnreliableSubscription(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
-	nopLog := utils.NewNopZapLogger()
+	nopLog := log.NewNopZapLogger()
 	network := networks.Mainnet
 	chain := blockchain.New(memory.New(), &network)
 	client := NewClient(nil, chain, nopLog).WithResubscribeDelay(0).WithPollFinalisedInterval(time.Nanosecond)

@@ -14,7 +14,7 @@ import (
 	"github.com/NethermindEth/juno/mempool"
 	"github.com/NethermindEth/juno/mempool/p2p"
 	pubsubtestutils "github.com/NethermindEth/juno/p2p/pubsub/testutils"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/sourcegraph/conc"
 	"github.com/sourcegraph/conc/iter"
 	"github.com/stretchr/testify/require"
@@ -43,7 +43,7 @@ func (m mockMempool) Push(ctx context.Context, tx *mempool.BroadcastedTransactio
 }
 
 func TestMempoolBroadcastersAndListeners(t *testing.T) {
-	logger, err := utils.NewZapLogger(utils.NewLogLevel(logLevel), utils.WithColour(true))
+	logger, err := log.NewZapLogger(log.NewLevel(logLevel), log.WithColour(true))
 	require.NoError(t, err)
 
 	transactions := make([][]mempool.BroadcastedTransaction, nodeCount)

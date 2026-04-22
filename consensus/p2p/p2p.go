@@ -18,7 +18,7 @@ import (
 	"github.com/NethermindEth/juno/p2p/starknetp2p"
 	"github.com/NethermindEth/juno/service"
 	"github.com/NethermindEth/juno/starknet/compiler"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	libp2p "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -42,7 +42,7 @@ type P2P[V types.Hashable[H], H types.Hash, A types.Addr] interface {
 
 type p2p[V types.Hashable[H], H types.Hash, A types.Addr] struct {
 	host             host.Host
-	log              utils.Logger
+	logger           log.Logger
 	network          *networks.Network
 	commitNotifier   chan types.Height
 	broadcasters     Broadcasters[V, H, A]
@@ -58,7 +58,7 @@ type attachedToTopic interface {
 
 func New(
 	host host.Host,
-	log utils.Logger,
+	logger log.Logger,
 	builder *builder.Builder,
 	proposalStore *proposal.ProposalStore[starknet.Hash],
 	currentHeight types.Height,
@@ -69,14 +69,14 @@ func New(
 	commitNotifier := make(chan types.Height, bufferSizeConfig.ProposalCommitNotifier)
 
 	proposalBroadcaster := proposer.NewProposalBroadcaster(
-		log,
+		logger,
 		proposer.NewStarknetProposerAdapter(),
 		proposalStore,
 		bufferSizeConfig.ProposalProtoBroadcaster,
 		bufferSizeConfig.RetryInterval,
 	)
 	voteBroadcaster := vote.NewVoteBroadcaster(
-		log,
+		logger,
 		vote.StarknetVoteAdapter,
 		bufferSizeConfig,
 	)
@@ -87,14 +87,18 @@ func New(
 	}
 
 	proposalStream := validator.NewProposalStreamDemux(
-		log,
+		logger,
 		proposalStore,
 		validator.NewTransition(builder, compiler),
 		bufferSizeConfig,
 		commitNotifier,
 		currentHeight,
 	)
-	voteStream := vote.NewVoteListeners[starknet.Value](log, vote.StarknetVoteAdapter, bufferSizeConfig)
+	voteStream := vote.NewVoteListeners[starknet.Value](
+		logger,
+		vote.StarknetVoteAdapter,
+		bufferSizeConfig,
+	)
 	listeners := Listeners[starknet.Value, starknet.Hash, starknet.Address]{
 		ProposalListener:  proposalStream,
 		PrevoteListener:   voteStream.PrevoteListener,
@@ -114,7 +118,7 @@ func New(
 
 	return &p2p[starknet.Value, starknet.Hash, starknet.Address]{
 		host:             host,
-		log:              log,
+		logger:           logger,
 		network:          builder.Network(),
 		commitNotifier:   commitNotifier,
 		broadcasters:     broadcasters,

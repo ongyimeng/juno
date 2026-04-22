@@ -20,7 +20,7 @@ import (
 	"github.com/NethermindEth/juno/genesis"
 	"github.com/NethermindEth/juno/mempool"
 	"github.com/NethermindEth/juno/starknet/compiler"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/juno/vm"
 	"github.com/sourcegraph/conc"
 	"github.com/sourcegraph/conc/pool"
@@ -40,7 +40,7 @@ const (
 var allBatchSizes = []int{1, 0, 3, 2, 4, 0, 1}
 
 func TestProposer(t *testing.T) {
-	logger, err := utils.NewZapLogger(utils.NewLogLevel(logLevel), utils.WithColour(true))
+	logger, err := log.NewZapLogger(log.NewLevel(logLevel), log.WithColour(true))
 	require.NoError(t, err)
 
 	proposerAddr := starknet.Address(felt.Zero)
@@ -219,7 +219,7 @@ func getBlockchain(t *testing.T) *blockchain.Blockchain {
 	return bc
 }
 
-func getBuilder(t *testing.T, log utils.Logger, bc *blockchain.Blockchain) *builder.Builder {
+func getBuilder(t *testing.T, logger log.Logger, bc *blockchain.Blockchain) *builder.Builder {
 	t.Helper()
 
 	genesisConfig, err := genesis.Read("../../genesis/genesis_prefund_accounts.json")
@@ -237,7 +237,7 @@ func getBuilder(t *testing.T, log utils.Logger, bc *blockchain.Blockchain) *buil
 	diff, classes, err := genesis.GenesisStateDiff(
 		t.Context(),
 		genesisConfig,
-		vm.New(&chainInfo, false, log),
+		vm.New(&chainInfo, false, logger),
 		bc.Network(),
 		vm.DefaultMaxSteps,
 		vm.DefaultMaxGas,
@@ -245,7 +245,7 @@ func getBuilder(t *testing.T, log utils.Logger, bc *blockchain.Blockchain) *buil
 	)
 	require.NoError(t, err)
 	require.NoError(t, bc.StoreGenesis(&diff, classes))
-	executor := builder.NewExecutor(bc, vm.New(&chainInfo, false, log), log, false, true)
+	executor := builder.NewExecutor(bc, vm.New(&chainInfo, false, logger), logger, false, true)
 	testBuilder := builder.New(bc, executor)
 	return &testBuilder
 }

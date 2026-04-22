@@ -13,14 +13,14 @@ import (
 	"github.com/NethermindEth/juno/consensus/types"
 	"github.com/NethermindEth/juno/consensus/types/actions"
 	"github.com/NethermindEth/juno/p2p/sync"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"go.uber.org/zap"
 )
 
 type TimeoutFn func(step types.Step, round types.Round) time.Duration
 
 type Driver[V types.Hashable[H], H types.Hash, A types.Addr] struct {
-	log              utils.Logger
+	logger           log.Logger
 	db               db.TendermintDB[V, H, A]
 	stateMachine     tendermint.StateMachine[V, H, A]
 	commitListener   CommitListener[V, H]
@@ -38,7 +38,7 @@ type Driver[V types.Hashable[H], H types.Hash, A types.Addr] struct {
 }
 
 func New[V types.Hashable[H], H types.Hash, A types.Addr](
-	log utils.Logger,
+	logger log.Logger,
 	db db.TendermintDB[V, H, A],
 	stateMachine tendermint.StateMachine[V, H, A],
 	commitListener CommitListener[V, H],
@@ -49,7 +49,7 @@ func New[V types.Hashable[H], H types.Hash, A types.Addr](
 	getTimeout TimeoutFn,
 ) Driver[V, H, A] {
 	return Driver[V, H, A]{
-		log:              log,
+		logger:           logger,
 		db:               db,
 		stateMachine:     stateMachine,
 		commitListener:   commitListener,
@@ -221,7 +221,7 @@ func (d *Driver[V, H, A]) scheduleTimeout(ctx context.Context, timeout types.Tim
 }
 
 func (d *Driver[V, H, A]) commit(ctx context.Context, commit *actions.Commit[V, H, A]) error {
-	d.log.Debug(
+	d.logger.Debug(
 		"Committing",
 		zap.Uint("height", uint(commit.Height)),
 		zap.Int("round", int(commit.Round)),

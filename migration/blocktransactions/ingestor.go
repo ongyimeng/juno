@@ -10,13 +10,13 @@ import (
 	"github.com/NethermindEth/juno/db/typed/prefix"
 	"github.com/NethermindEth/juno/migration/pipeline"
 	"github.com/NethermindEth/juno/migration/semaphore"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/fxamacker/cbor/v2"
 	"go.uber.org/zap"
 )
 
 type ingestor struct {
-	logger         utils.StructuredLogger
+	logger         log.StructuredLogger
 	database       db.KeyValueReader
 	chainHeight    uint64
 	batchSemaphore semaphore.ResourceSemaphore[db.Batch]
@@ -24,7 +24,7 @@ type ingestor struct {
 }
 
 func newIngestor(
-	logger utils.StructuredLogger,
+	logger log.StructuredLogger,
 	database db.KeyValueReader,
 	chainHeight uint64,
 	batchSemaphore semaphore.ResourceSemaphore[db.Batch],

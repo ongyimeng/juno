@@ -8,7 +8,7 @@ import (
 	"github.com/NethermindEth/juno/consensus/p2p/buffered"
 	"github.com/NethermindEth/juno/mempool"
 	"github.com/NethermindEth/juno/starknet/compiler"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	mempooltransaction "github.com/starknet-io/starknet-p2p-specs/p2p/proto/mempool/transaction"
 	"go.uber.org/zap"
@@ -17,7 +17,7 @@ import (
 
 func NewTransactionListener(
 	network *networks.Network,
-	log utils.Logger,
+	logger log.Logger,
 	pool mempool.Pool,
 	bufferSize int,
 	compiler compiler.Compiler,
@@ -25,7 +25,7 @@ func NewTransactionListener(
 	onMessage := func(ctx context.Context, msg *pubsub.Message) {
 		var p2pTransaction mempooltransaction.MempoolTransaction
 		if err := proto.Unmarshal(msg.Data, &p2pTransaction); err != nil {
-			log.Error("unable to unmarshal transaction message", zap.Error(err))
+			logger.Error("unable to unmarshal transaction message", zap.Error(err))
 			return
 		}
 
@@ -33,14 +33,14 @@ func NewTransactionListener(
 			ctx, compiler, &p2pTransaction, network,
 		)
 		if err != nil {
-			log.Error("unable to convert transaction message to transaction", zap.Error(err))
+			logger.Error("unable to convert transaction message to transaction", zap.Error(err))
 			return
 		}
 
 		if err := pool.Push(ctx, &transaction); err != nil {
-			log.Error("unable to push transaction to mempool", zap.Error(err))
+			logger.Error("unable to push transaction to mempool", zap.Error(err))
 		}
 	}
 
-	return buffered.NewTopicSubscription(log, bufferSize, onMessage)
+	return buffered.NewTopicSubscription(logger, bufferSize, onMessage)
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/starknet"
 	"github.com/NethermindEth/juno/starknet/compiler"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +65,7 @@ func TestCompile(t *testing.T) {
 	c := compiler.New(
 		1,
 		"",
-		utils.NewNopZapLogger(),
+		log.NewNopZapLogger(),
 	)
 
 	t.Run("cancelled context returns error", func(t *testing.T) {

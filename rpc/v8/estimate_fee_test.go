@@ -11,7 +11,7 @@ import (
 	"github.com/NethermindEth/juno/mocks"
 	"github.com/NethermindEth/juno/rpc/rpccore"
 	rpc "github.com/NethermindEth/juno/rpc/v8"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/NethermindEth/juno/vm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,8 +27,8 @@ func TestEstimateFee(t *testing.T) {
 	mockReader := mocks.NewMockReader(mockCtrl)
 	mockReader.EXPECT().Network().Return(n).AnyTimes()
 	mockVM := mocks.NewMockVM(mockCtrl)
-	log := utils.NewNopZapLogger()
-	handler := rpc.New(mockReader, nil, mockVM, log)
+	logger := log.NewNopZapLogger()
+	handler := rpc.New(mockReader, nil, mockVM, logger)
 
 	mockState := mocks.NewMockStateReader(mockCtrl)
 	mockReader.EXPECT().HeadState().Return(mockState, nopCloser, nil).AnyTimes()

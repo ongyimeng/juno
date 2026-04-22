@@ -17,7 +17,7 @@ import (
 	"github.com/NethermindEth/juno/l1"
 	"github.com/NethermindEth/juno/l1/contract"
 	"github.com/NethermindEth/juno/mocks"
-	"github.com/NethermindEth/juno/utils"
+	"github.com/NethermindEth/juno/utils/log"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -54,7 +54,7 @@ func TestFailToCreateSubscription(t *testing.T) {
 
 	network := networks.Mainnet
 	ctrl := gomock.NewController(t)
-	nopLog := utils.NewNopZapLogger()
+	nopLog := log.NewNopZapLogger()
 	chain := blockchain.New(memory.New(), &network)
 
 	subscriber := mocks.NewMockSubscriber(ctrl)
@@ -85,7 +85,7 @@ func TestMismatchedChainID(t *testing.T) {
 
 	network := networks.Mainnet
 	ctrl := gomock.NewController(t)
-	nopLog := utils.NewNopZapLogger()
+	nopLog := log.NewNopZapLogger()
 	chain := blockchain.New(memory.New(), &network)
 
 	subscriber := mocks.NewMockSubscriber(ctrl)
@@ -109,7 +109,7 @@ func TestEventListener(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
-	nopLog := utils.NewNopZapLogger()
+	nopLog := log.NewNopZapLogger()
 	network := networks.Mainnet
 	chain := blockchain.New(memory.New(), &network)
 
