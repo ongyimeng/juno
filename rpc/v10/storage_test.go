@@ -1474,6 +1474,36 @@ func TestStorageProof_StorageRoots(t *testing.T) {
 	})
 }
 
+func TestNodesFromRoot(t *testing.T) {
+	t.Run("returns nodes for an existing key", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		t.Cleanup(mockCtrl.Finish)
+
+		key := felt.NewFromUint64[felt.Felt](1)
+		key2 := felt.NewFromUint64[felt.Felt](8)
+		value := felt.NewFromUint64[felt.Felt](51)
+		value2 := felt.NewFromUint64[felt.Felt](58)
+
+		tempTrie := emptyTrie(t)
+		_, _ = tempTrie.Put(key, value)
+		_, _ = tempTrie.Put(key2, value2)
+		_ = tempTrie.Commit()
+
+		mockReader := mocks.NewMockReader(mockCtrl)
+		mockState := mocks.NewMockStateReader(mockCtrl)
+		mockReader.EXPECT().HeadState().Return(mockState, func() error { return nil }, nil)
+		mockState.EXPECT().ClassTrie().Return(tempTrie, nil)
+
+		handler := rpc.New(mockReader, nil, nil, utils.NewNopZapLogger())
+		nodes, rpcErr := handler.NodesFromRoot(key)
+
+		require.Nil(t, rpcErr)
+		expectedNodes, err := tempTrie.NodesFromRoot(key)
+		require.NoError(t, err)
+		require.Equal(t, adaptTrieNodesToRPCNodes(expectedNodes), nodes)
+	})
+}
+
 func arityTest(t *testing.T,
 	proof *rpc.StorageProofResult,
 	classesProofArity int,
@@ -1526,5 +1556,33 @@ func verifyGlobalStateRoot(t *testing.T, globalStateRoot, classRoot, storageRoot
 		assert.Equal(t, globalStateRoot, storageRoot)
 	} else {
 		assert.Equal(t, globalStateRoot, crypto.PoseidonArray(stateVersion, storageRoot, classRoot))
+	}
+}
+
+func adaptTrieNodesToRPCNodes(nodes []trie.NodeFromRoot) []rpc.NodeFromRoot {
+	result := make([]rpc.NodeFromRoot, len(nodes))
+	for i, node := range nodes {
+		result[i] = rpc.NodeFromRoot{
+			Key:       node.Key,
+			KeyLength: int(node.KeyLen),
+			Value:     node.Value,
+			Left:      adaptTrieNodeRefToRPCNodeRef(node.Left),
+			Right:     adaptTrieNodeRefToRPCNodeRef(node.Right),
+			LeftHash:  node.LeftHash,
+			RightHash: node.RightHash,
+		}
+	}
+
+	return result
+}
+
+func adaptTrieNodeRefToRPCNodeRef(node *trie.NodeFromRootRef) *rpc.NodeFromRootRef {
+	if node == nil {
+		return nil
+	}
+
+	return &rpc.NodeFromRootRef{
+		Key:       node.Key,
+		KeyLength: int(node.KeyLen),
 	}
 }

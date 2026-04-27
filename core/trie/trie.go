@@ -179,6 +179,21 @@ type StorageNode struct {
 	node *Node
 }
 
+type NodeFromRootRef struct {
+	Key    felt.Felt
+	KeyLen uint8
+}
+
+type NodeFromRoot struct {
+	Key       felt.Felt
+	KeyLen    uint8
+	Value     felt.Felt
+	Left      *NodeFromRootRef
+	Right     *NodeFromRootRef
+	LeftHash  *felt.Felt
+	RightHash *felt.Felt
+}
+
 func (sn *StorageNode) Key() *BitArray {
 	return sn.key
 }
@@ -212,6 +227,62 @@ func (sn *StorageNode) Update(other *StorageNode) error {
 	}
 
 	return nil
+}
+
+func (t *TrieReader) NodesFromRoot(key *felt.Felt) ([]NodeFromRoot, error) {
+	keyBits := t.FeltToKey(key)
+	nodes, err := t.nodesFromRoot(&keyBits)
+	if err != nil {
+		return nil, err
+	}
+
+	result := adaptStorageNodesToNodeFromRoot(nodes)
+	for i := range nodes {
+		n := nodes[i]
+		nodePool.Put(n.node)
+	}
+
+	return result, nil
+}
+
+func (t *Trie) NodesFromRoot(key *felt.Felt) ([]NodeFromRoot, error) {
+	return t.TrieReader.NodesFromRoot(key)
+}
+
+func adaptStorageNodesToNodeFromRoot(nodes []StorageNode) []NodeFromRoot {
+	result := make([]NodeFromRoot, len(nodes))
+	for i, node := range nodes {
+		result[i] = NodeFromRoot{
+			Key:       node.key.Felt(),
+			KeyLen:    node.key.Len(),
+			Value:     *node.node.Value,
+			Left:      bitArrayToNodeFromRootRef(node.node.Left),
+			Right:     bitArrayToNodeFromRootRef(node.node.Right),
+			LeftHash:  feltClone(node.node.LeftHash),
+			RightHash: feltClone(node.node.RightHash),
+		}
+	}
+
+	return result
+}
+
+func bitArrayToNodeFromRootRef(key *BitArray) *NodeFromRootRef {
+	if key == nil {
+		return nil
+	}
+
+	return &NodeFromRootRef{
+		Key:    key.Felt(),
+		KeyLen: key.Len(),
+	}
+}
+
+func feltClone(f *felt.Felt) *felt.Felt {
+	if f == nil {
+		return nil
+	}
+
+	return f.Clone()
 }
 
 func NewStorageNode(key *BitArray, node *Node) *StorageNode {

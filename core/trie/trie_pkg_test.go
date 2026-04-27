@@ -261,3 +261,97 @@ func TestTrieKeysAfterDeleteSubtree(t *testing.T) {
 		})
 	}
 }
+
+func TestNodesFromRootPrivateTraversal(t *testing.T) {
+	key := new(felt.Felt).SetUint64(1)
+	key2 := new(felt.Felt).SetUint64(8)
+	noSuchKey := new(felt.Felt).SetUint64(0)
+	value := new(felt.Felt).SetUint64(51)
+	value2 := new(felt.Felt).SetUint64(58)
+
+	t.Run("existing key", func(t *testing.T) {
+		memoryDB := memory.New()
+		txn := memoryDB.NewIndexedBatch()
+		tempTrie, err := NewTriePedersen(txn, nil, 251)
+		require.NoError(t, err)
+
+		_, err = tempTrie.Put(key, value)
+		require.NoError(t, err)
+		_, err = tempTrie.Put(key2, value2)
+		require.NoError(t, err)
+		require.NoError(t, tempTrie.Commit())
+
+		nodeKey := tempTrie.FeltToKey(key)
+		nodes, err := tempTrie.nodesFromRoot(&nodeKey)
+		require.NoError(t, err)
+		require.NotEmpty(t, nodes)
+		require.True(t, nodes[0].key.Equal(tempTrie.rootKey))
+		require.True(t, nodes[len(nodes)-1].key.Equal(&nodeKey))
+		assertNodesFollowKeyPath(t, nodes, &nodeKey)
+	})
+
+	t.Run("non-existing key", func(t *testing.T) {
+		memoryDB := memory.New()
+		txn := memoryDB.NewIndexedBatch()
+		tempTrie, err := NewTriePedersen(txn, nil, 251)
+		require.NoError(t, err)
+
+		_, err = tempTrie.Put(key, value)
+		require.NoError(t, err)
+		_, err = tempTrie.Put(key2, value2)
+		require.NoError(t, err)
+		require.NoError(t, tempTrie.Commit())
+
+		nodeKey := tempTrie.FeltToKey(noSuchKey)
+		nodes, err := tempTrie.nodesFromRoot(&nodeKey)
+		require.NoError(t, err)
+		require.NotEmpty(t, nodes)
+		require.True(t, nodes[0].key.Equal(tempTrie.rootKey))
+		require.False(t, nodes[len(nodes)-1].key.Equal(&nodeKey))
+		assertNodesFollowKeyPath(t, nodes, &nodeKey)
+	})
+}
+
+func TestNodesFromRootPublicWrapper(t *testing.T) {
+	memoryDB := memory.New()
+	txn := memoryDB.NewIndexedBatch()
+	tempTrie, err := NewTriePedersen(txn, nil, 251)
+	require.NoError(t, err)
+
+	key := new(felt.Felt).SetUint64(1)
+	key2 := new(felt.Felt).SetUint64(8)
+	value := new(felt.Felt).SetUint64(51)
+	value2 := new(felt.Felt).SetUint64(58)
+
+	_, err = tempTrie.Put(key, value)
+	require.NoError(t, err)
+	_, err = tempTrie.Put(key2, value2)
+	require.NoError(t, err)
+	require.NoError(t, tempTrie.Commit())
+
+	nodeKey := tempTrie.FeltToKey(key)
+	privateNodes, err := tempTrie.nodesFromRoot(&nodeKey)
+	require.NoError(t, err)
+
+	publicNodes, err := tempTrie.NodesFromRoot(key)
+	require.NoError(t, err)
+
+	require.Equal(t, adaptStorageNodesToNodeFromRoot(privateNodes), publicNodes)
+}
+
+func assertNodesFollowKeyPath(t *testing.T, nodes []StorageNode, key *BitArray) {
+	t.Helper()
+
+	for i := range len(nodes) - 1 {
+		cur := nodes[i]
+		next := nodes[i+1]
+
+		if key.IsBitSet(cur.key.Len()) {
+			require.NotNil(t, cur.node.Right)
+			require.True(t, next.key.Equal(cur.node.Right))
+		} else {
+			require.NotNil(t, cur.node.Left)
+			require.True(t, next.key.Equal(cur.node.Left))
+		}
+	}
+}

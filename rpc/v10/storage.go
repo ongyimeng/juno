@@ -145,6 +145,21 @@ type StorageProofResult struct {
 	GlobalRoots            *GlobalRoots    `json:"global_roots"`
 }
 
+type NodeFromRootRef struct {
+	Key       felt.Felt `json:"key"`
+	KeyLength int       `json:"key_length"`
+}
+
+type NodeFromRoot struct {
+	Key       felt.Felt        `json:"key"`
+	KeyLength int              `json:"key_length"`
+	Value     felt.Felt        `json:"value"`
+	Left      *NodeFromRootRef `json:"left"`
+	Right     *NodeFromRootRef `json:"right"`
+	LeftHash  *felt.Felt       `json:"left_hash"`
+	RightHash *felt.Felt       `json:"right_hash"`
+}
+
 // StorageAt get merkle paths in one of the state tries: global state, classes,
 // individual contract. A single request can query for any mix of the three types
 // of storage proofs (classes, contracts, and storage).
@@ -234,6 +249,31 @@ func (h *Handler) StorageProof(
 			BlockHash:         header.Hash,
 		},
 	}, nil
+}
+
+func (h *Handler) NodesFromRoot(key *felt.Felt) ([]NodeFromRoot, *jsonrpc.Error) {
+	state, closer, err := h.bcReader.HeadState()
+	if err != nil {
+		return nil, rpccore.ErrInternal.CloneWithData(err)
+	}
+	defer h.callAndLogErr(closer, "Error closing state reader in getNodesFromRoot")
+
+	classTrie, err := state.ClassTrie()
+	if err != nil {
+		return nil, rpccore.ErrInternal.CloneWithData(err)
+	}
+
+	t, ok := classTrie.(*trie.Trie)
+	if !ok {
+		return nil, rpccore.ErrInternal.CloneWithData(fmt.Errorf("unknown trie type: %T", classTrie))
+	}
+
+	nodes, err := t.NodesFromRoot(key)
+	if err != nil {
+		return nil, rpccore.ErrInternal.CloneWithData(err)
+	}
+
+	return adaptNodesFromRoot(nodes), nil
 }
 
 // Ensures each contract is unique and each storage key in each contract is unique
@@ -401,6 +441,34 @@ func getContractStorageProof(
 	}
 
 	return contractStorageRes, nil
+}
+
+func adaptNodesFromRoot(nodes []trie.NodeFromRoot) []NodeFromRoot {
+	result := make([]NodeFromRoot, len(nodes))
+	for i, node := range nodes {
+		result[i] = NodeFromRoot{
+			Key:       node.Key,
+			KeyLength: int(node.KeyLen),
+			Value:     node.Value,
+			Left:      adaptNodeFromRootRef(node.Left),
+			Right:     adaptNodeFromRootRef(node.Right),
+			LeftHash:  node.LeftHash,
+			RightHash: node.RightHash,
+		}
+	}
+
+	return result
+}
+
+func adaptNodeFromRootRef(node *trie.NodeFromRootRef) *NodeFromRootRef {
+	if node == nil {
+		return nil
+	}
+
+	return &NodeFromRootRef{
+		Key:       node.Key,
+		KeyLength: int(node.KeyLen),
+	}
 }
 
 func adaptProofNodes(proof *trie.ProofNodeSet) []*HashToNode {

@@ -7,6 +7,7 @@ import (
 	"github.com/NethermindEth/juno/blockchain/networks"
 	"github.com/NethermindEth/juno/clients/feeder"
 	"github.com/NethermindEth/juno/core"
+	"github.com/NethermindEth/juno/core/felt"
 	"github.com/NethermindEth/juno/feed"
 	"github.com/NethermindEth/juno/jsonrpc"
 	"github.com/NethermindEth/juno/mempool"
@@ -116,6 +117,10 @@ func (h *Handler) WithReceivedTransactionFeed(feed *feed.Feed[core.Transaction])
 
 func (h *Handler) Version() (string, *jsonrpc.Error) {
 	return h.version, nil
+}
+
+func (h *Handler) NodesFromRoot(key *felt.Felt) ([]rpcv10.NodeFromRoot, *jsonrpc.Error) {
+	return h.rpcv10Handler.NodesFromRoot(key)
 }
 
 func (h *Handler) Run(ctx context.Context) error {
@@ -248,6 +253,11 @@ func (h *Handler) MethodsV0_10() ([]jsonrpc.Method, string) {
 		{
 			Name:    "juno_version",
 			Handler: h.Version,
+		},
+		{
+			Name:    "juno_getNodesFromRoot",
+			Params:  []jsonrpc.Parameter{{Name: "key"}},
+			Handler: h.NodesFromRoot,
 		},
 		{
 			Name:    "starknet_getTransactionStatus",
@@ -472,6 +482,11 @@ func (h *Handler) MethodsV0_9() ([]jsonrpc.Method, string) {
 			Handler: h.Version,
 		},
 		{
+			Name:    "juno_getNodesFromRoot",
+			Params:  []jsonrpc.Parameter{{Name: "key"}},
+			Handler: h.NodesFromRoot,
+		},
+		{
 			Name:    "starknet_getTransactionStatus",
 			Params:  []jsonrpc.Parameter{{Name: "transaction_hash"}},
 			Handler: h.rpcv9Handler.TransactionStatus,
@@ -674,6 +689,11 @@ func (h *Handler) MethodsV0_8() ([]jsonrpc.Method, string) { //nolint:funlen
 		{
 			Name:    "juno_version",
 			Handler: h.Version,
+		},
+		{
+			Name:    "juno_getNodesFromRoot",
+			Params:  []jsonrpc.Parameter{{Name: "key"}},
+			Handler: h.NodesFromRoot,
 		},
 		{
 			Name:    "starknet_getTransactionStatus",
